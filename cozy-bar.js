@@ -678,743 +678,6 @@ module.exports = _typeof;
 
 /***/ }),
 
-/***/ "./node_modules/@babel/runtime/node_modules/regenerator-runtime/runtime.js":
-/*!*********************************************************************************!*\
-  !*** ./node_modules/@babel/runtime/node_modules/regenerator-runtime/runtime.js ***!
-  \*********************************************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-/**
- * Copyright (c) 2014-present, Facebook, Inc.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
-var runtime = (function (exports) {
-  "use strict";
-
-  var Op = Object.prototype;
-  var hasOwn = Op.hasOwnProperty;
-  var undefined; // More compressible than void 0.
-  var $Symbol = typeof Symbol === "function" ? Symbol : {};
-  var iteratorSymbol = $Symbol.iterator || "@@iterator";
-  var asyncIteratorSymbol = $Symbol.asyncIterator || "@@asyncIterator";
-  var toStringTagSymbol = $Symbol.toStringTag || "@@toStringTag";
-
-  function wrap(innerFn, outerFn, self, tryLocsList) {
-    // If outerFn provided and outerFn.prototype is a Generator, then outerFn.prototype instanceof Generator.
-    var protoGenerator = outerFn && outerFn.prototype instanceof Generator ? outerFn : Generator;
-    var generator = Object.create(protoGenerator.prototype);
-    var context = new Context(tryLocsList || []);
-
-    // The ._invoke method unifies the implementations of the .next,
-    // .throw, and .return methods.
-    generator._invoke = makeInvokeMethod(innerFn, self, context);
-
-    return generator;
-  }
-  exports.wrap = wrap;
-
-  // Try/catch helper to minimize deoptimizations. Returns a completion
-  // record like context.tryEntries[i].completion. This interface could
-  // have been (and was previously) designed to take a closure to be
-  // invoked without arguments, but in all the cases we care about we
-  // already have an existing method we want to call, so there's no need
-  // to create a new function object. We can even get away with assuming
-  // the method takes exactly one argument, since that happens to be true
-  // in every case, so we don't have to touch the arguments object. The
-  // only additional allocation required is the completion record, which
-  // has a stable shape and so hopefully should be cheap to allocate.
-  function tryCatch(fn, obj, arg) {
-    try {
-      return { type: "normal", arg: fn.call(obj, arg) };
-    } catch (err) {
-      return { type: "throw", arg: err };
-    }
-  }
-
-  var GenStateSuspendedStart = "suspendedStart";
-  var GenStateSuspendedYield = "suspendedYield";
-  var GenStateExecuting = "executing";
-  var GenStateCompleted = "completed";
-
-  // Returning this object from the innerFn has the same effect as
-  // breaking out of the dispatch switch statement.
-  var ContinueSentinel = {};
-
-  // Dummy constructor functions that we use as the .constructor and
-  // .constructor.prototype properties for functions that return Generator
-  // objects. For full spec compliance, you may wish to configure your
-  // minifier not to mangle the names of these two functions.
-  function Generator() {}
-  function GeneratorFunction() {}
-  function GeneratorFunctionPrototype() {}
-
-  // This is a polyfill for %IteratorPrototype% for environments that
-  // don't natively support it.
-  var IteratorPrototype = {};
-  IteratorPrototype[iteratorSymbol] = function () {
-    return this;
-  };
-
-  var getProto = Object.getPrototypeOf;
-  var NativeIteratorPrototype = getProto && getProto(getProto(values([])));
-  if (NativeIteratorPrototype &&
-      NativeIteratorPrototype !== Op &&
-      hasOwn.call(NativeIteratorPrototype, iteratorSymbol)) {
-    // This environment has a native %IteratorPrototype%; use it instead
-    // of the polyfill.
-    IteratorPrototype = NativeIteratorPrototype;
-  }
-
-  var Gp = GeneratorFunctionPrototype.prototype =
-    Generator.prototype = Object.create(IteratorPrototype);
-  GeneratorFunction.prototype = Gp.constructor = GeneratorFunctionPrototype;
-  GeneratorFunctionPrototype.constructor = GeneratorFunction;
-  GeneratorFunctionPrototype[toStringTagSymbol] =
-    GeneratorFunction.displayName = "GeneratorFunction";
-
-  // Helper for defining the .next, .throw, and .return methods of the
-  // Iterator interface in terms of a single ._invoke method.
-  function defineIteratorMethods(prototype) {
-    ["next", "throw", "return"].forEach(function(method) {
-      prototype[method] = function(arg) {
-        return this._invoke(method, arg);
-      };
-    });
-  }
-
-  exports.isGeneratorFunction = function(genFun) {
-    var ctor = typeof genFun === "function" && genFun.constructor;
-    return ctor
-      ? ctor === GeneratorFunction ||
-        // For the native GeneratorFunction constructor, the best we can
-        // do is to check its .name property.
-        (ctor.displayName || ctor.name) === "GeneratorFunction"
-      : false;
-  };
-
-  exports.mark = function(genFun) {
-    if (Object.setPrototypeOf) {
-      Object.setPrototypeOf(genFun, GeneratorFunctionPrototype);
-    } else {
-      genFun.__proto__ = GeneratorFunctionPrototype;
-      if (!(toStringTagSymbol in genFun)) {
-        genFun[toStringTagSymbol] = "GeneratorFunction";
-      }
-    }
-    genFun.prototype = Object.create(Gp);
-    return genFun;
-  };
-
-  // Within the body of any async function, `await x` is transformed to
-  // `yield regeneratorRuntime.awrap(x)`, so that the runtime can test
-  // `hasOwn.call(value, "__await")` to determine if the yielded value is
-  // meant to be awaited.
-  exports.awrap = function(arg) {
-    return { __await: arg };
-  };
-
-  function AsyncIterator(generator) {
-    function invoke(method, arg, resolve, reject) {
-      var record = tryCatch(generator[method], generator, arg);
-      if (record.type === "throw") {
-        reject(record.arg);
-      } else {
-        var result = record.arg;
-        var value = result.value;
-        if (value &&
-            typeof value === "object" &&
-            hasOwn.call(value, "__await")) {
-          return Promise.resolve(value.__await).then(function(value) {
-            invoke("next", value, resolve, reject);
-          }, function(err) {
-            invoke("throw", err, resolve, reject);
-          });
-        }
-
-        return Promise.resolve(value).then(function(unwrapped) {
-          // When a yielded Promise is resolved, its final value becomes
-          // the .value of the Promise<{value,done}> result for the
-          // current iteration.
-          result.value = unwrapped;
-          resolve(result);
-        }, function(error) {
-          // If a rejected Promise was yielded, throw the rejection back
-          // into the async generator function so it can be handled there.
-          return invoke("throw", error, resolve, reject);
-        });
-      }
-    }
-
-    var previousPromise;
-
-    function enqueue(method, arg) {
-      function callInvokeWithMethodAndArg() {
-        return new Promise(function(resolve, reject) {
-          invoke(method, arg, resolve, reject);
-        });
-      }
-
-      return previousPromise =
-        // If enqueue has been called before, then we want to wait until
-        // all previous Promises have been resolved before calling invoke,
-        // so that results are always delivered in the correct order. If
-        // enqueue has not been called before, then it is important to
-        // call invoke immediately, without waiting on a callback to fire,
-        // so that the async generator function has the opportunity to do
-        // any necessary setup in a predictable way. This predictability
-        // is why the Promise constructor synchronously invokes its
-        // executor callback, and why async functions synchronously
-        // execute code before the first await. Since we implement simple
-        // async functions in terms of async generators, it is especially
-        // important to get this right, even though it requires care.
-        previousPromise ? previousPromise.then(
-          callInvokeWithMethodAndArg,
-          // Avoid propagating failures to Promises returned by later
-          // invocations of the iterator.
-          callInvokeWithMethodAndArg
-        ) : callInvokeWithMethodAndArg();
-    }
-
-    // Define the unified helper method that is used to implement .next,
-    // .throw, and .return (see defineIteratorMethods).
-    this._invoke = enqueue;
-  }
-
-  defineIteratorMethods(AsyncIterator.prototype);
-  AsyncIterator.prototype[asyncIteratorSymbol] = function () {
-    return this;
-  };
-  exports.AsyncIterator = AsyncIterator;
-
-  // Note that simple async functions are implemented on top of
-  // AsyncIterator objects; they just return a Promise for the value of
-  // the final result produced by the iterator.
-  exports.async = function(innerFn, outerFn, self, tryLocsList) {
-    var iter = new AsyncIterator(
-      wrap(innerFn, outerFn, self, tryLocsList)
-    );
-
-    return exports.isGeneratorFunction(outerFn)
-      ? iter // If outerFn is a generator, return the full iterator.
-      : iter.next().then(function(result) {
-          return result.done ? result.value : iter.next();
-        });
-  };
-
-  function makeInvokeMethod(innerFn, self, context) {
-    var state = GenStateSuspendedStart;
-
-    return function invoke(method, arg) {
-      if (state === GenStateExecuting) {
-        throw new Error("Generator is already running");
-      }
-
-      if (state === GenStateCompleted) {
-        if (method === "throw") {
-          throw arg;
-        }
-
-        // Be forgiving, per 25.3.3.3.3 of the spec:
-        // https://people.mozilla.org/~jorendorff/es6-draft.html#sec-generatorresume
-        return doneResult();
-      }
-
-      context.method = method;
-      context.arg = arg;
-
-      while (true) {
-        var delegate = context.delegate;
-        if (delegate) {
-          var delegateResult = maybeInvokeDelegate(delegate, context);
-          if (delegateResult) {
-            if (delegateResult === ContinueSentinel) continue;
-            return delegateResult;
-          }
-        }
-
-        if (context.method === "next") {
-          // Setting context._sent for legacy support of Babel's
-          // function.sent implementation.
-          context.sent = context._sent = context.arg;
-
-        } else if (context.method === "throw") {
-          if (state === GenStateSuspendedStart) {
-            state = GenStateCompleted;
-            throw context.arg;
-          }
-
-          context.dispatchException(context.arg);
-
-        } else if (context.method === "return") {
-          context.abrupt("return", context.arg);
-        }
-
-        state = GenStateExecuting;
-
-        var record = tryCatch(innerFn, self, context);
-        if (record.type === "normal") {
-          // If an exception is thrown from innerFn, we leave state ===
-          // GenStateExecuting and loop back for another invocation.
-          state = context.done
-            ? GenStateCompleted
-            : GenStateSuspendedYield;
-
-          if (record.arg === ContinueSentinel) {
-            continue;
-          }
-
-          return {
-            value: record.arg,
-            done: context.done
-          };
-
-        } else if (record.type === "throw") {
-          state = GenStateCompleted;
-          // Dispatch the exception by looping back around to the
-          // context.dispatchException(context.arg) call above.
-          context.method = "throw";
-          context.arg = record.arg;
-        }
-      }
-    };
-  }
-
-  // Call delegate.iterator[context.method](context.arg) and handle the
-  // result, either by returning a { value, done } result from the
-  // delegate iterator, or by modifying context.method and context.arg,
-  // setting context.delegate to null, and returning the ContinueSentinel.
-  function maybeInvokeDelegate(delegate, context) {
-    var method = delegate.iterator[context.method];
-    if (method === undefined) {
-      // A .throw or .return when the delegate iterator has no .throw
-      // method always terminates the yield* loop.
-      context.delegate = null;
-
-      if (context.method === "throw") {
-        // Note: ["return"] must be used for ES3 parsing compatibility.
-        if (delegate.iterator["return"]) {
-          // If the delegate iterator has a return method, give it a
-          // chance to clean up.
-          context.method = "return";
-          context.arg = undefined;
-          maybeInvokeDelegate(delegate, context);
-
-          if (context.method === "throw") {
-            // If maybeInvokeDelegate(context) changed context.method from
-            // "return" to "throw", let that override the TypeError below.
-            return ContinueSentinel;
-          }
-        }
-
-        context.method = "throw";
-        context.arg = new TypeError(
-          "The iterator does not provide a 'throw' method");
-      }
-
-      return ContinueSentinel;
-    }
-
-    var record = tryCatch(method, delegate.iterator, context.arg);
-
-    if (record.type === "throw") {
-      context.method = "throw";
-      context.arg = record.arg;
-      context.delegate = null;
-      return ContinueSentinel;
-    }
-
-    var info = record.arg;
-
-    if (! info) {
-      context.method = "throw";
-      context.arg = new TypeError("iterator result is not an object");
-      context.delegate = null;
-      return ContinueSentinel;
-    }
-
-    if (info.done) {
-      // Assign the result of the finished delegate to the temporary
-      // variable specified by delegate.resultName (see delegateYield).
-      context[delegate.resultName] = info.value;
-
-      // Resume execution at the desired location (see delegateYield).
-      context.next = delegate.nextLoc;
-
-      // If context.method was "throw" but the delegate handled the
-      // exception, let the outer generator proceed normally. If
-      // context.method was "next", forget context.arg since it has been
-      // "consumed" by the delegate iterator. If context.method was
-      // "return", allow the original .return call to continue in the
-      // outer generator.
-      if (context.method !== "return") {
-        context.method = "next";
-        context.arg = undefined;
-      }
-
-    } else {
-      // Re-yield the result returned by the delegate method.
-      return info;
-    }
-
-    // The delegate iterator is finished, so forget it and continue with
-    // the outer generator.
-    context.delegate = null;
-    return ContinueSentinel;
-  }
-
-  // Define Generator.prototype.{next,throw,return} in terms of the
-  // unified ._invoke helper method.
-  defineIteratorMethods(Gp);
-
-  Gp[toStringTagSymbol] = "Generator";
-
-  // A Generator should always return itself as the iterator object when the
-  // @@iterator function is called on it. Some browsers' implementations of the
-  // iterator prototype chain incorrectly implement this, causing the Generator
-  // object to not be returned from this call. This ensures that doesn't happen.
-  // See https://github.com/facebook/regenerator/issues/274 for more details.
-  Gp[iteratorSymbol] = function() {
-    return this;
-  };
-
-  Gp.toString = function() {
-    return "[object Generator]";
-  };
-
-  function pushTryEntry(locs) {
-    var entry = { tryLoc: locs[0] };
-
-    if (1 in locs) {
-      entry.catchLoc = locs[1];
-    }
-
-    if (2 in locs) {
-      entry.finallyLoc = locs[2];
-      entry.afterLoc = locs[3];
-    }
-
-    this.tryEntries.push(entry);
-  }
-
-  function resetTryEntry(entry) {
-    var record = entry.completion || {};
-    record.type = "normal";
-    delete record.arg;
-    entry.completion = record;
-  }
-
-  function Context(tryLocsList) {
-    // The root entry object (effectively a try statement without a catch
-    // or a finally block) gives us a place to store values thrown from
-    // locations where there is no enclosing try statement.
-    this.tryEntries = [{ tryLoc: "root" }];
-    tryLocsList.forEach(pushTryEntry, this);
-    this.reset(true);
-  }
-
-  exports.keys = function(object) {
-    var keys = [];
-    for (var key in object) {
-      keys.push(key);
-    }
-    keys.reverse();
-
-    // Rather than returning an object with a next method, we keep
-    // things simple and return the next function itself.
-    return function next() {
-      while (keys.length) {
-        var key = keys.pop();
-        if (key in object) {
-          next.value = key;
-          next.done = false;
-          return next;
-        }
-      }
-
-      // To avoid creating an additional object, we just hang the .value
-      // and .done properties off the next function object itself. This
-      // also ensures that the minifier will not anonymize the function.
-      next.done = true;
-      return next;
-    };
-  };
-
-  function values(iterable) {
-    if (iterable) {
-      var iteratorMethod = iterable[iteratorSymbol];
-      if (iteratorMethod) {
-        return iteratorMethod.call(iterable);
-      }
-
-      if (typeof iterable.next === "function") {
-        return iterable;
-      }
-
-      if (!isNaN(iterable.length)) {
-        var i = -1, next = function next() {
-          while (++i < iterable.length) {
-            if (hasOwn.call(iterable, i)) {
-              next.value = iterable[i];
-              next.done = false;
-              return next;
-            }
-          }
-
-          next.value = undefined;
-          next.done = true;
-
-          return next;
-        };
-
-        return next.next = next;
-      }
-    }
-
-    // Return an iterator with no values.
-    return { next: doneResult };
-  }
-  exports.values = values;
-
-  function doneResult() {
-    return { value: undefined, done: true };
-  }
-
-  Context.prototype = {
-    constructor: Context,
-
-    reset: function(skipTempReset) {
-      this.prev = 0;
-      this.next = 0;
-      // Resetting context._sent for legacy support of Babel's
-      // function.sent implementation.
-      this.sent = this._sent = undefined;
-      this.done = false;
-      this.delegate = null;
-
-      this.method = "next";
-      this.arg = undefined;
-
-      this.tryEntries.forEach(resetTryEntry);
-
-      if (!skipTempReset) {
-        for (var name in this) {
-          // Not sure about the optimal order of these conditions:
-          if (name.charAt(0) === "t" &&
-              hasOwn.call(this, name) &&
-              !isNaN(+name.slice(1))) {
-            this[name] = undefined;
-          }
-        }
-      }
-    },
-
-    stop: function() {
-      this.done = true;
-
-      var rootEntry = this.tryEntries[0];
-      var rootRecord = rootEntry.completion;
-      if (rootRecord.type === "throw") {
-        throw rootRecord.arg;
-      }
-
-      return this.rval;
-    },
-
-    dispatchException: function(exception) {
-      if (this.done) {
-        throw exception;
-      }
-
-      var context = this;
-      function handle(loc, caught) {
-        record.type = "throw";
-        record.arg = exception;
-        context.next = loc;
-
-        if (caught) {
-          // If the dispatched exception was caught by a catch block,
-          // then let that catch block handle the exception normally.
-          context.method = "next";
-          context.arg = undefined;
-        }
-
-        return !! caught;
-      }
-
-      for (var i = this.tryEntries.length - 1; i >= 0; --i) {
-        var entry = this.tryEntries[i];
-        var record = entry.completion;
-
-        if (entry.tryLoc === "root") {
-          // Exception thrown outside of any try block that could handle
-          // it, so set the completion value of the entire function to
-          // throw the exception.
-          return handle("end");
-        }
-
-        if (entry.tryLoc <= this.prev) {
-          var hasCatch = hasOwn.call(entry, "catchLoc");
-          var hasFinally = hasOwn.call(entry, "finallyLoc");
-
-          if (hasCatch && hasFinally) {
-            if (this.prev < entry.catchLoc) {
-              return handle(entry.catchLoc, true);
-            } else if (this.prev < entry.finallyLoc) {
-              return handle(entry.finallyLoc);
-            }
-
-          } else if (hasCatch) {
-            if (this.prev < entry.catchLoc) {
-              return handle(entry.catchLoc, true);
-            }
-
-          } else if (hasFinally) {
-            if (this.prev < entry.finallyLoc) {
-              return handle(entry.finallyLoc);
-            }
-
-          } else {
-            throw new Error("try statement without catch or finally");
-          }
-        }
-      }
-    },
-
-    abrupt: function(type, arg) {
-      for (var i = this.tryEntries.length - 1; i >= 0; --i) {
-        var entry = this.tryEntries[i];
-        if (entry.tryLoc <= this.prev &&
-            hasOwn.call(entry, "finallyLoc") &&
-            this.prev < entry.finallyLoc) {
-          var finallyEntry = entry;
-          break;
-        }
-      }
-
-      if (finallyEntry &&
-          (type === "break" ||
-           type === "continue") &&
-          finallyEntry.tryLoc <= arg &&
-          arg <= finallyEntry.finallyLoc) {
-        // Ignore the finally entry if control is not jumping to a
-        // location outside the try/catch block.
-        finallyEntry = null;
-      }
-
-      var record = finallyEntry ? finallyEntry.completion : {};
-      record.type = type;
-      record.arg = arg;
-
-      if (finallyEntry) {
-        this.method = "next";
-        this.next = finallyEntry.finallyLoc;
-        return ContinueSentinel;
-      }
-
-      return this.complete(record);
-    },
-
-    complete: function(record, afterLoc) {
-      if (record.type === "throw") {
-        throw record.arg;
-      }
-
-      if (record.type === "break" ||
-          record.type === "continue") {
-        this.next = record.arg;
-      } else if (record.type === "return") {
-        this.rval = this.arg = record.arg;
-        this.method = "return";
-        this.next = "end";
-      } else if (record.type === "normal" && afterLoc) {
-        this.next = afterLoc;
-      }
-
-      return ContinueSentinel;
-    },
-
-    finish: function(finallyLoc) {
-      for (var i = this.tryEntries.length - 1; i >= 0; --i) {
-        var entry = this.tryEntries[i];
-        if (entry.finallyLoc === finallyLoc) {
-          this.complete(entry.completion, entry.afterLoc);
-          resetTryEntry(entry);
-          return ContinueSentinel;
-        }
-      }
-    },
-
-    "catch": function(tryLoc) {
-      for (var i = this.tryEntries.length - 1; i >= 0; --i) {
-        var entry = this.tryEntries[i];
-        if (entry.tryLoc === tryLoc) {
-          var record = entry.completion;
-          if (record.type === "throw") {
-            var thrown = record.arg;
-            resetTryEntry(entry);
-          }
-          return thrown;
-        }
-      }
-
-      // The context.catch method must only be called with a location
-      // argument that corresponds to a known catch block.
-      throw new Error("illegal catch attempt");
-    },
-
-    delegateYield: function(iterable, resultName, nextLoc) {
-      this.delegate = {
-        iterator: values(iterable),
-        resultName: resultName,
-        nextLoc: nextLoc
-      };
-
-      if (this.method === "next") {
-        // Deliberately forget the last sent value so that we don't
-        // accidentally pass it on to the delegate.
-        this.arg = undefined;
-      }
-
-      return ContinueSentinel;
-    }
-  };
-
-  // Regardless of whether this script is executing as a CommonJS module
-  // or not, return the runtime object so that we can declare the variable
-  // regeneratorRuntime in the outer scope, which allows this module to be
-  // injected easily by `bin/regenerator --include-runtime script.js`.
-  return exports;
-
-}(
-  // If this script is executing as a CommonJS module, use module.exports
-  // as the regeneratorRuntime namespace. Otherwise create a new empty
-  // object. Either way, the resulting object will be used to initialize
-  // the regeneratorRuntime variable at the top of this file.
-   true ? module.exports : undefined
-));
-
-try {
-  regeneratorRuntime = runtime;
-} catch (accidentalStrictMode) {
-  // This module should not be running in strict mode, so the above
-  // assignment should always work unless something is misconfigured. Just
-  // in case runtime.js accidentally runs in strict mode, we can escape
-  // strict mode using a global Function call. This could conceivably fail
-  // if a Content Security Policy forbids using Function, but in that case
-  // the proper solution is to fix the accidental strict mode problem. If
-  // you've misconfigured your bundler to force strict mode and applied a
-  // CSP to forbid Function, and you're not willing to fix either of those
-  // problems, please detail your unique predicament in a GitHub issue.
-  Function("r", "regeneratorRuntime = r")(runtime);
-}
-
-
-/***/ }),
-
 /***/ "./node_modules/@babel/runtime/regenerator/index.js":
 /*!**********************************************************!*\
   !*** ./node_modules/@babel/runtime/regenerator/index.js ***!
@@ -1422,7 +685,7 @@ try {
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__(/*! regenerator-runtime */ "./node_modules/@babel/runtime/node_modules/regenerator-runtime/runtime.js");
+module.exports = __webpack_require__(/*! regenerator-runtime */ "./node_modules/regenerator-runtime/runtime.js");
 
 
 /***/ }),
@@ -2152,6 +1415,790 @@ exports.default = typeof _symbol2.default === "function" && _typeof(_iterator2.d
 
 /***/ }),
 
+/***/ "./node_modules/babel-runtime/node_modules/regenerator-runtime/runtime-module.js":
+/*!***************************************************************************************!*\
+  !*** ./node_modules/babel-runtime/node_modules/regenerator-runtime/runtime-module.js ***!
+  \***************************************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+/**
+ * Copyright (c) 2014-present, Facebook, Inc.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+// This method of obtaining a reference to the global object needs to be
+// kept identical to the way it is obtained in runtime.js
+var g = (function() { return this })() || Function("return this")();
+
+// Use `getOwnPropertyNames` because not all browsers support calling
+// `hasOwnProperty` on the global `self` object in a worker. See #183.
+var hadRuntime = g.regeneratorRuntime &&
+  Object.getOwnPropertyNames(g).indexOf("regeneratorRuntime") >= 0;
+
+// Save the old regeneratorRuntime in case it needs to be restored later.
+var oldRuntime = hadRuntime && g.regeneratorRuntime;
+
+// Force reevalutation of runtime.js.
+g.regeneratorRuntime = undefined;
+
+module.exports = __webpack_require__(/*! ./runtime */ "./node_modules/babel-runtime/node_modules/regenerator-runtime/runtime.js");
+
+if (hadRuntime) {
+  // Restore the original runtime.
+  g.regeneratorRuntime = oldRuntime;
+} else {
+  // Remove the global property added by runtime.js.
+  try {
+    delete g.regeneratorRuntime;
+  } catch(e) {
+    g.regeneratorRuntime = undefined;
+  }
+}
+
+
+/***/ }),
+
+/***/ "./node_modules/babel-runtime/node_modules/regenerator-runtime/runtime.js":
+/*!********************************************************************************!*\
+  !*** ./node_modules/babel-runtime/node_modules/regenerator-runtime/runtime.js ***!
+  \********************************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports) {
+
+/**
+ * Copyright (c) 2014-present, Facebook, Inc.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+!(function(global) {
+  "use strict";
+
+  var Op = Object.prototype;
+  var hasOwn = Op.hasOwnProperty;
+  var undefined; // More compressible than void 0.
+  var $Symbol = typeof Symbol === "function" ? Symbol : {};
+  var iteratorSymbol = $Symbol.iterator || "@@iterator";
+  var asyncIteratorSymbol = $Symbol.asyncIterator || "@@asyncIterator";
+  var toStringTagSymbol = $Symbol.toStringTag || "@@toStringTag";
+
+  var inModule = typeof module === "object";
+  var runtime = global.regeneratorRuntime;
+  if (runtime) {
+    if (inModule) {
+      // If regeneratorRuntime is defined globally and we're in a module,
+      // make the exports object identical to regeneratorRuntime.
+      module.exports = runtime;
+    }
+    // Don't bother evaluating the rest of this file if the runtime was
+    // already defined globally.
+    return;
+  }
+
+  // Define the runtime globally (as expected by generated code) as either
+  // module.exports (if we're in a module) or a new, empty object.
+  runtime = global.regeneratorRuntime = inModule ? module.exports : {};
+
+  function wrap(innerFn, outerFn, self, tryLocsList) {
+    // If outerFn provided and outerFn.prototype is a Generator, then outerFn.prototype instanceof Generator.
+    var protoGenerator = outerFn && outerFn.prototype instanceof Generator ? outerFn : Generator;
+    var generator = Object.create(protoGenerator.prototype);
+    var context = new Context(tryLocsList || []);
+
+    // The ._invoke method unifies the implementations of the .next,
+    // .throw, and .return methods.
+    generator._invoke = makeInvokeMethod(innerFn, self, context);
+
+    return generator;
+  }
+  runtime.wrap = wrap;
+
+  // Try/catch helper to minimize deoptimizations. Returns a completion
+  // record like context.tryEntries[i].completion. This interface could
+  // have been (and was previously) designed to take a closure to be
+  // invoked without arguments, but in all the cases we care about we
+  // already have an existing method we want to call, so there's no need
+  // to create a new function object. We can even get away with assuming
+  // the method takes exactly one argument, since that happens to be true
+  // in every case, so we don't have to touch the arguments object. The
+  // only additional allocation required is the completion record, which
+  // has a stable shape and so hopefully should be cheap to allocate.
+  function tryCatch(fn, obj, arg) {
+    try {
+      return { type: "normal", arg: fn.call(obj, arg) };
+    } catch (err) {
+      return { type: "throw", arg: err };
+    }
+  }
+
+  var GenStateSuspendedStart = "suspendedStart";
+  var GenStateSuspendedYield = "suspendedYield";
+  var GenStateExecuting = "executing";
+  var GenStateCompleted = "completed";
+
+  // Returning this object from the innerFn has the same effect as
+  // breaking out of the dispatch switch statement.
+  var ContinueSentinel = {};
+
+  // Dummy constructor functions that we use as the .constructor and
+  // .constructor.prototype properties for functions that return Generator
+  // objects. For full spec compliance, you may wish to configure your
+  // minifier not to mangle the names of these two functions.
+  function Generator() {}
+  function GeneratorFunction() {}
+  function GeneratorFunctionPrototype() {}
+
+  // This is a polyfill for %IteratorPrototype% for environments that
+  // don't natively support it.
+  var IteratorPrototype = {};
+  IteratorPrototype[iteratorSymbol] = function () {
+    return this;
+  };
+
+  var getProto = Object.getPrototypeOf;
+  var NativeIteratorPrototype = getProto && getProto(getProto(values([])));
+  if (NativeIteratorPrototype &&
+      NativeIteratorPrototype !== Op &&
+      hasOwn.call(NativeIteratorPrototype, iteratorSymbol)) {
+    // This environment has a native %IteratorPrototype%; use it instead
+    // of the polyfill.
+    IteratorPrototype = NativeIteratorPrototype;
+  }
+
+  var Gp = GeneratorFunctionPrototype.prototype =
+    Generator.prototype = Object.create(IteratorPrototype);
+  GeneratorFunction.prototype = Gp.constructor = GeneratorFunctionPrototype;
+  GeneratorFunctionPrototype.constructor = GeneratorFunction;
+  GeneratorFunctionPrototype[toStringTagSymbol] =
+    GeneratorFunction.displayName = "GeneratorFunction";
+
+  // Helper for defining the .next, .throw, and .return methods of the
+  // Iterator interface in terms of a single ._invoke method.
+  function defineIteratorMethods(prototype) {
+    ["next", "throw", "return"].forEach(function(method) {
+      prototype[method] = function(arg) {
+        return this._invoke(method, arg);
+      };
+    });
+  }
+
+  runtime.isGeneratorFunction = function(genFun) {
+    var ctor = typeof genFun === "function" && genFun.constructor;
+    return ctor
+      ? ctor === GeneratorFunction ||
+        // For the native GeneratorFunction constructor, the best we can
+        // do is to check its .name property.
+        (ctor.displayName || ctor.name) === "GeneratorFunction"
+      : false;
+  };
+
+  runtime.mark = function(genFun) {
+    if (Object.setPrototypeOf) {
+      Object.setPrototypeOf(genFun, GeneratorFunctionPrototype);
+    } else {
+      genFun.__proto__ = GeneratorFunctionPrototype;
+      if (!(toStringTagSymbol in genFun)) {
+        genFun[toStringTagSymbol] = "GeneratorFunction";
+      }
+    }
+    genFun.prototype = Object.create(Gp);
+    return genFun;
+  };
+
+  // Within the body of any async function, `await x` is transformed to
+  // `yield regeneratorRuntime.awrap(x)`, so that the runtime can test
+  // `hasOwn.call(value, "__await")` to determine if the yielded value is
+  // meant to be awaited.
+  runtime.awrap = function(arg) {
+    return { __await: arg };
+  };
+
+  function AsyncIterator(generator) {
+    function invoke(method, arg, resolve, reject) {
+      var record = tryCatch(generator[method], generator, arg);
+      if (record.type === "throw") {
+        reject(record.arg);
+      } else {
+        var result = record.arg;
+        var value = result.value;
+        if (value &&
+            typeof value === "object" &&
+            hasOwn.call(value, "__await")) {
+          return Promise.resolve(value.__await).then(function(value) {
+            invoke("next", value, resolve, reject);
+          }, function(err) {
+            invoke("throw", err, resolve, reject);
+          });
+        }
+
+        return Promise.resolve(value).then(function(unwrapped) {
+          // When a yielded Promise is resolved, its final value becomes
+          // the .value of the Promise<{value,done}> result for the
+          // current iteration. If the Promise is rejected, however, the
+          // result for this iteration will be rejected with the same
+          // reason. Note that rejections of yielded Promises are not
+          // thrown back into the generator function, as is the case
+          // when an awaited Promise is rejected. This difference in
+          // behavior between yield and await is important, because it
+          // allows the consumer to decide what to do with the yielded
+          // rejection (swallow it and continue, manually .throw it back
+          // into the generator, abandon iteration, whatever). With
+          // await, by contrast, there is no opportunity to examine the
+          // rejection reason outside the generator function, so the
+          // only option is to throw it from the await expression, and
+          // let the generator function handle the exception.
+          result.value = unwrapped;
+          resolve(result);
+        }, reject);
+      }
+    }
+
+    var previousPromise;
+
+    function enqueue(method, arg) {
+      function callInvokeWithMethodAndArg() {
+        return new Promise(function(resolve, reject) {
+          invoke(method, arg, resolve, reject);
+        });
+      }
+
+      return previousPromise =
+        // If enqueue has been called before, then we want to wait until
+        // all previous Promises have been resolved before calling invoke,
+        // so that results are always delivered in the correct order. If
+        // enqueue has not been called before, then it is important to
+        // call invoke immediately, without waiting on a callback to fire,
+        // so that the async generator function has the opportunity to do
+        // any necessary setup in a predictable way. This predictability
+        // is why the Promise constructor synchronously invokes its
+        // executor callback, and why async functions synchronously
+        // execute code before the first await. Since we implement simple
+        // async functions in terms of async generators, it is especially
+        // important to get this right, even though it requires care.
+        previousPromise ? previousPromise.then(
+          callInvokeWithMethodAndArg,
+          // Avoid propagating failures to Promises returned by later
+          // invocations of the iterator.
+          callInvokeWithMethodAndArg
+        ) : callInvokeWithMethodAndArg();
+    }
+
+    // Define the unified helper method that is used to implement .next,
+    // .throw, and .return (see defineIteratorMethods).
+    this._invoke = enqueue;
+  }
+
+  defineIteratorMethods(AsyncIterator.prototype);
+  AsyncIterator.prototype[asyncIteratorSymbol] = function () {
+    return this;
+  };
+  runtime.AsyncIterator = AsyncIterator;
+
+  // Note that simple async functions are implemented on top of
+  // AsyncIterator objects; they just return a Promise for the value of
+  // the final result produced by the iterator.
+  runtime.async = function(innerFn, outerFn, self, tryLocsList) {
+    var iter = new AsyncIterator(
+      wrap(innerFn, outerFn, self, tryLocsList)
+    );
+
+    return runtime.isGeneratorFunction(outerFn)
+      ? iter // If outerFn is a generator, return the full iterator.
+      : iter.next().then(function(result) {
+          return result.done ? result.value : iter.next();
+        });
+  };
+
+  function makeInvokeMethod(innerFn, self, context) {
+    var state = GenStateSuspendedStart;
+
+    return function invoke(method, arg) {
+      if (state === GenStateExecuting) {
+        throw new Error("Generator is already running");
+      }
+
+      if (state === GenStateCompleted) {
+        if (method === "throw") {
+          throw arg;
+        }
+
+        // Be forgiving, per 25.3.3.3.3 of the spec:
+        // https://people.mozilla.org/~jorendorff/es6-draft.html#sec-generatorresume
+        return doneResult();
+      }
+
+      context.method = method;
+      context.arg = arg;
+
+      while (true) {
+        var delegate = context.delegate;
+        if (delegate) {
+          var delegateResult = maybeInvokeDelegate(delegate, context);
+          if (delegateResult) {
+            if (delegateResult === ContinueSentinel) continue;
+            return delegateResult;
+          }
+        }
+
+        if (context.method === "next") {
+          // Setting context._sent for legacy support of Babel's
+          // function.sent implementation.
+          context.sent = context._sent = context.arg;
+
+        } else if (context.method === "throw") {
+          if (state === GenStateSuspendedStart) {
+            state = GenStateCompleted;
+            throw context.arg;
+          }
+
+          context.dispatchException(context.arg);
+
+        } else if (context.method === "return") {
+          context.abrupt("return", context.arg);
+        }
+
+        state = GenStateExecuting;
+
+        var record = tryCatch(innerFn, self, context);
+        if (record.type === "normal") {
+          // If an exception is thrown from innerFn, we leave state ===
+          // GenStateExecuting and loop back for another invocation.
+          state = context.done
+            ? GenStateCompleted
+            : GenStateSuspendedYield;
+
+          if (record.arg === ContinueSentinel) {
+            continue;
+          }
+
+          return {
+            value: record.arg,
+            done: context.done
+          };
+
+        } else if (record.type === "throw") {
+          state = GenStateCompleted;
+          // Dispatch the exception by looping back around to the
+          // context.dispatchException(context.arg) call above.
+          context.method = "throw";
+          context.arg = record.arg;
+        }
+      }
+    };
+  }
+
+  // Call delegate.iterator[context.method](context.arg) and handle the
+  // result, either by returning a { value, done } result from the
+  // delegate iterator, or by modifying context.method and context.arg,
+  // setting context.delegate to null, and returning the ContinueSentinel.
+  function maybeInvokeDelegate(delegate, context) {
+    var method = delegate.iterator[context.method];
+    if (method === undefined) {
+      // A .throw or .return when the delegate iterator has no .throw
+      // method always terminates the yield* loop.
+      context.delegate = null;
+
+      if (context.method === "throw") {
+        if (delegate.iterator.return) {
+          // If the delegate iterator has a return method, give it a
+          // chance to clean up.
+          context.method = "return";
+          context.arg = undefined;
+          maybeInvokeDelegate(delegate, context);
+
+          if (context.method === "throw") {
+            // If maybeInvokeDelegate(context) changed context.method from
+            // "return" to "throw", let that override the TypeError below.
+            return ContinueSentinel;
+          }
+        }
+
+        context.method = "throw";
+        context.arg = new TypeError(
+          "The iterator does not provide a 'throw' method");
+      }
+
+      return ContinueSentinel;
+    }
+
+    var record = tryCatch(method, delegate.iterator, context.arg);
+
+    if (record.type === "throw") {
+      context.method = "throw";
+      context.arg = record.arg;
+      context.delegate = null;
+      return ContinueSentinel;
+    }
+
+    var info = record.arg;
+
+    if (! info) {
+      context.method = "throw";
+      context.arg = new TypeError("iterator result is not an object");
+      context.delegate = null;
+      return ContinueSentinel;
+    }
+
+    if (info.done) {
+      // Assign the result of the finished delegate to the temporary
+      // variable specified by delegate.resultName (see delegateYield).
+      context[delegate.resultName] = info.value;
+
+      // Resume execution at the desired location (see delegateYield).
+      context.next = delegate.nextLoc;
+
+      // If context.method was "throw" but the delegate handled the
+      // exception, let the outer generator proceed normally. If
+      // context.method was "next", forget context.arg since it has been
+      // "consumed" by the delegate iterator. If context.method was
+      // "return", allow the original .return call to continue in the
+      // outer generator.
+      if (context.method !== "return") {
+        context.method = "next";
+        context.arg = undefined;
+      }
+
+    } else {
+      // Re-yield the result returned by the delegate method.
+      return info;
+    }
+
+    // The delegate iterator is finished, so forget it and continue with
+    // the outer generator.
+    context.delegate = null;
+    return ContinueSentinel;
+  }
+
+  // Define Generator.prototype.{next,throw,return} in terms of the
+  // unified ._invoke helper method.
+  defineIteratorMethods(Gp);
+
+  Gp[toStringTagSymbol] = "Generator";
+
+  // A Generator should always return itself as the iterator object when the
+  // @@iterator function is called on it. Some browsers' implementations of the
+  // iterator prototype chain incorrectly implement this, causing the Generator
+  // object to not be returned from this call. This ensures that doesn't happen.
+  // See https://github.com/facebook/regenerator/issues/274 for more details.
+  Gp[iteratorSymbol] = function() {
+    return this;
+  };
+
+  Gp.toString = function() {
+    return "[object Generator]";
+  };
+
+  function pushTryEntry(locs) {
+    var entry = { tryLoc: locs[0] };
+
+    if (1 in locs) {
+      entry.catchLoc = locs[1];
+    }
+
+    if (2 in locs) {
+      entry.finallyLoc = locs[2];
+      entry.afterLoc = locs[3];
+    }
+
+    this.tryEntries.push(entry);
+  }
+
+  function resetTryEntry(entry) {
+    var record = entry.completion || {};
+    record.type = "normal";
+    delete record.arg;
+    entry.completion = record;
+  }
+
+  function Context(tryLocsList) {
+    // The root entry object (effectively a try statement without a catch
+    // or a finally block) gives us a place to store values thrown from
+    // locations where there is no enclosing try statement.
+    this.tryEntries = [{ tryLoc: "root" }];
+    tryLocsList.forEach(pushTryEntry, this);
+    this.reset(true);
+  }
+
+  runtime.keys = function(object) {
+    var keys = [];
+    for (var key in object) {
+      keys.push(key);
+    }
+    keys.reverse();
+
+    // Rather than returning an object with a next method, we keep
+    // things simple and return the next function itself.
+    return function next() {
+      while (keys.length) {
+        var key = keys.pop();
+        if (key in object) {
+          next.value = key;
+          next.done = false;
+          return next;
+        }
+      }
+
+      // To avoid creating an additional object, we just hang the .value
+      // and .done properties off the next function object itself. This
+      // also ensures that the minifier will not anonymize the function.
+      next.done = true;
+      return next;
+    };
+  };
+
+  function values(iterable) {
+    if (iterable) {
+      var iteratorMethod = iterable[iteratorSymbol];
+      if (iteratorMethod) {
+        return iteratorMethod.call(iterable);
+      }
+
+      if (typeof iterable.next === "function") {
+        return iterable;
+      }
+
+      if (!isNaN(iterable.length)) {
+        var i = -1, next = function next() {
+          while (++i < iterable.length) {
+            if (hasOwn.call(iterable, i)) {
+              next.value = iterable[i];
+              next.done = false;
+              return next;
+            }
+          }
+
+          next.value = undefined;
+          next.done = true;
+
+          return next;
+        };
+
+        return next.next = next;
+      }
+    }
+
+    // Return an iterator with no values.
+    return { next: doneResult };
+  }
+  runtime.values = values;
+
+  function doneResult() {
+    return { value: undefined, done: true };
+  }
+
+  Context.prototype = {
+    constructor: Context,
+
+    reset: function(skipTempReset) {
+      this.prev = 0;
+      this.next = 0;
+      // Resetting context._sent for legacy support of Babel's
+      // function.sent implementation.
+      this.sent = this._sent = undefined;
+      this.done = false;
+      this.delegate = null;
+
+      this.method = "next";
+      this.arg = undefined;
+
+      this.tryEntries.forEach(resetTryEntry);
+
+      if (!skipTempReset) {
+        for (var name in this) {
+          // Not sure about the optimal order of these conditions:
+          if (name.charAt(0) === "t" &&
+              hasOwn.call(this, name) &&
+              !isNaN(+name.slice(1))) {
+            this[name] = undefined;
+          }
+        }
+      }
+    },
+
+    stop: function() {
+      this.done = true;
+
+      var rootEntry = this.tryEntries[0];
+      var rootRecord = rootEntry.completion;
+      if (rootRecord.type === "throw") {
+        throw rootRecord.arg;
+      }
+
+      return this.rval;
+    },
+
+    dispatchException: function(exception) {
+      if (this.done) {
+        throw exception;
+      }
+
+      var context = this;
+      function handle(loc, caught) {
+        record.type = "throw";
+        record.arg = exception;
+        context.next = loc;
+
+        if (caught) {
+          // If the dispatched exception was caught by a catch block,
+          // then let that catch block handle the exception normally.
+          context.method = "next";
+          context.arg = undefined;
+        }
+
+        return !! caught;
+      }
+
+      for (var i = this.tryEntries.length - 1; i >= 0; --i) {
+        var entry = this.tryEntries[i];
+        var record = entry.completion;
+
+        if (entry.tryLoc === "root") {
+          // Exception thrown outside of any try block that could handle
+          // it, so set the completion value of the entire function to
+          // throw the exception.
+          return handle("end");
+        }
+
+        if (entry.tryLoc <= this.prev) {
+          var hasCatch = hasOwn.call(entry, "catchLoc");
+          var hasFinally = hasOwn.call(entry, "finallyLoc");
+
+          if (hasCatch && hasFinally) {
+            if (this.prev < entry.catchLoc) {
+              return handle(entry.catchLoc, true);
+            } else if (this.prev < entry.finallyLoc) {
+              return handle(entry.finallyLoc);
+            }
+
+          } else if (hasCatch) {
+            if (this.prev < entry.catchLoc) {
+              return handle(entry.catchLoc, true);
+            }
+
+          } else if (hasFinally) {
+            if (this.prev < entry.finallyLoc) {
+              return handle(entry.finallyLoc);
+            }
+
+          } else {
+            throw new Error("try statement without catch or finally");
+          }
+        }
+      }
+    },
+
+    abrupt: function(type, arg) {
+      for (var i = this.tryEntries.length - 1; i >= 0; --i) {
+        var entry = this.tryEntries[i];
+        if (entry.tryLoc <= this.prev &&
+            hasOwn.call(entry, "finallyLoc") &&
+            this.prev < entry.finallyLoc) {
+          var finallyEntry = entry;
+          break;
+        }
+      }
+
+      if (finallyEntry &&
+          (type === "break" ||
+           type === "continue") &&
+          finallyEntry.tryLoc <= arg &&
+          arg <= finallyEntry.finallyLoc) {
+        // Ignore the finally entry if control is not jumping to a
+        // location outside the try/catch block.
+        finallyEntry = null;
+      }
+
+      var record = finallyEntry ? finallyEntry.completion : {};
+      record.type = type;
+      record.arg = arg;
+
+      if (finallyEntry) {
+        this.method = "next";
+        this.next = finallyEntry.finallyLoc;
+        return ContinueSentinel;
+      }
+
+      return this.complete(record);
+    },
+
+    complete: function(record, afterLoc) {
+      if (record.type === "throw") {
+        throw record.arg;
+      }
+
+      if (record.type === "break" ||
+          record.type === "continue") {
+        this.next = record.arg;
+      } else if (record.type === "return") {
+        this.rval = this.arg = record.arg;
+        this.method = "return";
+        this.next = "end";
+      } else if (record.type === "normal" && afterLoc) {
+        this.next = afterLoc;
+      }
+
+      return ContinueSentinel;
+    },
+
+    finish: function(finallyLoc) {
+      for (var i = this.tryEntries.length - 1; i >= 0; --i) {
+        var entry = this.tryEntries[i];
+        if (entry.finallyLoc === finallyLoc) {
+          this.complete(entry.completion, entry.afterLoc);
+          resetTryEntry(entry);
+          return ContinueSentinel;
+        }
+      }
+    },
+
+    "catch": function(tryLoc) {
+      for (var i = this.tryEntries.length - 1; i >= 0; --i) {
+        var entry = this.tryEntries[i];
+        if (entry.tryLoc === tryLoc) {
+          var record = entry.completion;
+          if (record.type === "throw") {
+            var thrown = record.arg;
+            resetTryEntry(entry);
+          }
+          return thrown;
+        }
+      }
+
+      // The context.catch method must only be called with a location
+      // argument that corresponds to a known catch block.
+      throw new Error("illegal catch attempt");
+    },
+
+    delegateYield: function(iterable, resultName, nextLoc) {
+      this.delegate = {
+        iterator: values(iterable),
+        resultName: resultName,
+        nextLoc: nextLoc
+      };
+
+      if (this.method === "next") {
+        // Deliberately forget the last sent value so that we don't
+        // accidentally pass it on to the delegate.
+        this.arg = undefined;
+      }
+
+      return ContinueSentinel;
+    }
+  };
+})(
+  // In sloppy mode, unbound `this` refers to the global object, fallback to
+  // Function constructor if we're in global strict mode. That is sadly a form
+  // of indirect eval which violates Content Security Policy.
+  (function() { return this })() || Function("return this")()
+);
+
+
+/***/ }),
+
 /***/ "./node_modules/babel-runtime/regenerator/index.js":
 /*!*********************************************************!*\
   !*** ./node_modules/babel-runtime/regenerator/index.js ***!
@@ -2159,7 +2206,7 @@ exports.default = typeof _symbol2.default === "function" && _typeof(_iterator2.d
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__(/*! regenerator-runtime */ "./node_modules/regenerator-runtime/runtime-module.js");
+module.exports = __webpack_require__(/*! regenerator-runtime */ "./node_modules/babel-runtime/node_modules/regenerator-runtime/runtime-module.js");
 
 
 /***/ }),
@@ -6049,7 +6096,7 @@ for (var i = 0; i < DOMIterables.length; i++) {
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
-
+/* WEBPACK VAR INJECTION */(function(process) {
 
 Object.defineProperty(exports, "__esModule", {
   value: true
@@ -6258,6 +6305,9 @@ var CozyClient = function () {
       this.login();
     }
   }
+
+  /** In konnector/service context, CozyClient can be instantiated from environment variables */
+
 
   (0, _createClass3.default)(CozyClient, [{
     key: 'addSchema',
@@ -7684,6 +7734,29 @@ var CozyClient = function () {
       });
     }
   }], [{
+    key: 'fromEnv',
+    value: function fromEnv(env) {
+      var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+
+      env = env || (typeof process !== 'undefined' ? Object({"USE_REACT":true}) : {});
+      var _env = env,
+          COZY_URL = _env.COZY_URL,
+          COZY_CREDENTIALS = _env.COZY_CREDENTIALS,
+          NODE_ENV = _env.NODE_ENV;
+
+      if (!COZY_URL || !COZY_CREDENTIALS) {
+        throw new Error('Env used to instantiate CozyClient must have COZY_URL and COZY_CREDENTIALS');
+      }
+      if (NODE_ENV === 'development') {
+        options.oauth = JSON.parse(COZY_CREDENTIALS);
+      } else {
+        options.token = COZY_CREDENTIALS.trim();
+      }
+      options.uri = COZY_URL.trim();
+
+      return new CozyClient((0, _extends3.default)({}, options));
+    }
+  }, {
     key: 'registerHook',
     value: function registerHook(doctype, name, fn) {
       CozyClient.hooks = CozyClient.hooks || {};
@@ -7698,6 +7771,7 @@ var CozyClient = function () {
 _microee2.default.mixin(CozyClient);
 
 exports.default = CozyClient;
+/* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../../process/browser.js */ "./node_modules/process/browser.js")))
 
 /***/ }),
 
@@ -10353,6 +10427,26 @@ var REGISTRATION_ABORT = exports.REGISTRATION_ABORT = 'REGISTRATION_ABORT';
 
 /***/ }),
 
+/***/ "./node_modules/cozy-client/dist/constants.js":
+/*!****************************************************!*\
+  !*** ./node_modules/cozy-client/dist/constants.js ***!
+  \****************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+var APP_TYPE = exports.APP_TYPE = {
+  KONNECTOR: 'konnector',
+  WEBAPP: 'webapp'
+};
+
+/***/ }),
+
 /***/ "./node_modules/cozy-client/dist/helpers.js":
 /*!**************************************************!*\
   !*** ./node_modules/cozy-client/dist/helpers.js ***!
@@ -10456,6 +10550,7 @@ var withClient = exports.withClient = function withClient(Component) {
   var Wrapped = function Wrapped(props, context) {
     return _react2.default.createElement(Component, (0, _extends5.default)({}, props, { client: context.client }));
   };
+  Wrapped.displayName = 'withClient(' + (Component.displayName || Component.name) + ')';
   Wrapped.contextTypes = {
     client: _propTypes2.default.object
   };
@@ -10488,6 +10583,7 @@ var withQuery = function withQuery(dest, queryOpts, Original) {
     Wrapped.contextTypes = {
       client: _propTypes2.default.object
     };
+    Wrapped.displayName = 'withQuery(' + (Component.displayName || Component.name) + ')';
     return Wrapped;
   };
 };
@@ -10523,6 +10619,7 @@ var queryConnect = exports.queryConnect = function queryConnect(querySpecs) {
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+exports.manifest = exports.Registry = exports.getQueryFromState = exports.cancelable = exports.dehydrate = exports.HasManyTriggers = exports.HasManyInPlace = exports.HasOneInPlace = exports.HasOne = exports.HasMany = exports.Association = exports.withClient = exports.queryConnect = exports.getDoctypeFromOperation = exports.MutationTypes = exports.QueryDefinition = exports.compose = exports.Query = exports.withMutations = exports.withMutation = exports.connect = exports.StackLink = exports.CozyLink = exports.CozyProvider = exports.default = undefined;
 
 var _CozyClient = __webpack_require__(/*! ./CozyClient */ "./node_modules/cozy-client/dist/CozyClient.js");
 
@@ -10689,6 +10786,15 @@ Object.defineProperty(exports, 'dehydrate', {
   }
 });
 
+var _utils = __webpack_require__(/*! ./utils */ "./node_modules/cozy-client/dist/utils.js");
+
+Object.defineProperty(exports, 'cancelable', {
+  enumerable: true,
+  get: function get() {
+    return _utils.cancelable;
+  }
+});
+
 var _store = __webpack_require__(/*! ./store */ "./node_modules/cozy-client/dist/store/index.js");
 
 Object.defineProperty(exports, 'getQueryFromState', {
@@ -10698,7 +10804,120 @@ Object.defineProperty(exports, 'getQueryFromState', {
   }
 });
 
+var _registry = __webpack_require__(/*! ./registry */ "./node_modules/cozy-client/dist/registry.js");
+
+Object.defineProperty(exports, 'Registry', {
+  enumerable: true,
+  get: function get() {
+    return _interopRequireDefault(_registry).default;
+  }
+});
+
+var _manifest = __webpack_require__(/*! ./manifest */ "./node_modules/cozy-client/dist/manifest.js");
+
+var manifest = _interopRequireWildcard(_manifest);
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+exports.manifest = manifest;
+
+/***/ }),
+
+/***/ "./node_modules/cozy-client/dist/manifest.js":
+/*!***************************************************!*\
+  !*** ./node_modules/cozy-client/dist/manifest.js ***!
+  \***************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+
+var _typeof2 = __webpack_require__(/*! babel-runtime/helpers/typeof */ "./node_modules/babel-runtime/helpers/typeof.js");
+
+var _typeof3 = _interopRequireDefault(_typeof2);
+
+var _extends2 = __webpack_require__(/*! babel-runtime/helpers/extends */ "./node_modules/babel-runtime/helpers/extends.js");
+
+var _extends3 = _interopRequireDefault(_extends2);
+
+exports.sanitizeCategories = sanitizeCategories;
+exports.areTermsValid = areTermsValid;
+exports.isPartnershipValid = isPartnershipValid;
+exports.sanitize = sanitize;
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+var APP_CATEGORIES = ['banking', 'cozy', 'energy', 'health', 'host_provider', 'insurance', 'isp', 'mes_infos', 'online_services', 'others', 'partners', 'press', 'productivity', 'ptnb', 'public_service', 'shopping', 'social', 'telecom', 'transport'];
+
+/** Filters unauthorized categories. Defaults to ['others'] if no suitable category. */
+function sanitizeCategories(categories) {
+  if (!categories) return ['others'];
+  var filteredList = categories.filter(function (c) {
+    return APP_CATEGORIES.includes(c);
+  });
+  if (!filteredList.length) return ['others'];
+  return filteredList;
+}
+
+function areTermsValid(terms) {
+  return Boolean(terms && terms.id && terms.url && terms.version);
+}
+
+function isPartnershipValid(partnership) {
+  return Boolean(partnership && partnership.description);
+}
+
+/**
+ * Normalize app manifest, retrocompatibility for old manifests
+ *
+ * @param  {Manifest} manifest
+ * @return {Manifest}
+ */
+function sanitize(manifest) {
+  var sanitized = (0, _extends3.default)({}, manifest);
+
+  // Make categories an array and delete category attribute if it exists
+  if (!manifest.categories && manifest.category && typeof manifest.category === 'string') {
+    sanitized.categories = [manifest.category];
+    delete sanitized.category;
+  }
+
+  sanitized.categories = sanitizeCategories(sanitized.categories);
+
+  // manifest name is not an object
+  if ((0, _typeof3.default)(manifest.name) === 'object') sanitized.name = manifest.name.en;
+
+  // Fix camelCase from cozy-stack
+  if (manifest.available_version) {
+    sanitized.availableVersion = manifest.available_version;
+    delete sanitized.available_version;
+  }
+
+  // Fix camelCase from cozy-stack
+  if (manifest.latest_version) {
+    sanitized.latestVersion = manifest.latestVersion;
+    delete sanitized.latest_version;
+  }
+
+  // Remove invalid terms
+  if (sanitized.terms && !areTermsValid(sanitized.terms)) {
+    delete sanitized.terms;
+  }
+
+  // Remove invalid partnership
+  if (sanitized.partnership && !isPartnershipValid(sanitized.partnership)) {
+    delete sanitized.partnership;
+  }
+
+  return sanitized;
+}
 
 /***/ }),
 
@@ -11113,6 +11332,218 @@ var optimizeQueries = function optimizeQueries(queries) {
 };
 
 exports.default = optimizeQueries;
+
+/***/ }),
+
+/***/ "./node_modules/cozy-client/dist/registry.js":
+/*!***************************************************!*\
+  !*** ./node_modules/cozy-client/dist/registry.js ***!
+  \***************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+
+var _regenerator = __webpack_require__(/*! babel-runtime/regenerator */ "./node_modules/babel-runtime/regenerator/index.js");
+
+var _regenerator2 = _interopRequireDefault(_regenerator);
+
+var _asyncToGenerator2 = __webpack_require__(/*! babel-runtime/helpers/asyncToGenerator */ "./node_modules/babel-runtime/helpers/asyncToGenerator.js");
+
+var _asyncToGenerator3 = _interopRequireDefault(_asyncToGenerator2);
+
+var _classCallCheck2 = __webpack_require__(/*! babel-runtime/helpers/classCallCheck */ "./node_modules/babel-runtime/helpers/classCallCheck.js");
+
+var _classCallCheck3 = _interopRequireDefault(_classCallCheck2);
+
+var _createClass2 = __webpack_require__(/*! babel-runtime/helpers/createClass */ "./node_modules/babel-runtime/helpers/createClass.js");
+
+var _createClass3 = _interopRequireDefault(_createClass2);
+
+__webpack_require__(/*! url-search-params-polyfill */ "./node_modules/url-search-params-polyfill/index.js");
+
+var _terms = __webpack_require__(/*! ./terms */ "./node_modules/cozy-client/dist/terms.js");
+
+var _terms2 = _interopRequireDefault(_terms);
+
+var _constants = __webpack_require__(/*! ./constants */ "./node_modules/cozy-client/dist/constants.js");
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+var queryPartFromOptions = function queryPartFromOptions(options) {
+  var query = new URLSearchParams(options).toString();
+  return query ? '?' + query : '';
+};
+
+var getBaseRoute = function getBaseRoute(app) {
+  var type = app.type;
+  // TODO node is an historic type, it should be `konnector`, check with the back
+
+  var route = type === _constants.APP_TYPE.KONNECTOR || type === 'node' ? 'konnectors' : 'apps';
+  return '/' + route;
+};
+
+var Registry = function () {
+  function Registry(options) {
+    (0, _classCallCheck3.default)(this, Registry);
+
+    if (!options.client) {
+      throw new Error('Need to pass a client to instantiate a Registry API.');
+    }
+    this.client = options.client;
+  }
+
+  /**
+   * Installs or updates an app from a source.
+   *
+   * Accepts the terms if the app has them.
+    * @param  {RegistryApp} app - App to be installed 
+   * @param  {string} source - String (ex: registry://drive/stable)
+   * @return {Promise}
+   */
+
+
+  (0, _createClass3.default)(Registry, [{
+    key: 'installApp',
+    value: function () {
+      var _ref = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee(app, source) {
+        var slug, terms, searchParams, isUpdate, querypart, verb, baseRoute;
+        return _regenerator2.default.wrap(function _callee$(_context) {
+          while (1) {
+            switch (_context.prev = _context.next) {
+              case 0:
+                slug = app.slug, terms = app.terms;
+                searchParams = {};
+                isUpdate = app.installed;
+
+                if (isUpdate) searchParams.PermissionsAcked = isUpdate;
+                if (source) searchParams.Source = source;
+                querypart = queryPartFromOptions(searchParams);
+
+                if (!terms) {
+                  _context.next = 9;
+                  break;
+                }
+
+                _context.next = 9;
+                return _terms2.default.save(this.client, terms);
+
+              case 9:
+                verb = app.installed ? 'PUT' : 'POST';
+                baseRoute = getBaseRoute(app);
+                return _context.abrupt('return', this.client.stackClient.fetchJSON(verb, baseRoute + '/' + slug + querypart));
+
+              case 12:
+              case 'end':
+                return _context.stop();
+            }
+          }
+        }, _callee, this);
+      }));
+
+      function installApp(_x, _x2) {
+        return _ref.apply(this, arguments);
+      }
+
+      return installApp;
+    }()
+
+    /**
+     * Uninstalls an app.
+     */
+
+  }, {
+    key: 'uninstallApp',
+    value: function () {
+      var _ref2 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee2(app) {
+        var slug, baseRoute;
+        return _regenerator2.default.wrap(function _callee2$(_context2) {
+          while (1) {
+            switch (_context2.prev = _context2.next) {
+              case 0:
+                slug = app.slug;
+                baseRoute = getBaseRoute(app);
+                return _context2.abrupt('return', this.client.stackClient.fetchJSON('DELETE', baseRoute + '/' + slug));
+
+              case 3:
+              case 'end':
+                return _context2.stop();
+            }
+          }
+        }, _callee2, this);
+      }));
+
+      function uninstallApp(_x3) {
+        return _ref2.apply(this, arguments);
+      }
+
+      return uninstallApp;
+    }()
+
+    /**
+     * Fetch at most 200 apps from the channel
+     *
+     * @param  {string} options.type - "webapp" or "konnector"
+     * @param  {string} options.channel - "dev"/"beta"/"stable"
+     *
+     * @return {Array<RegistryApp>}
+     */
+
+  }, {
+    key: 'fetchApps',
+    value: function () {
+      var _ref3 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee3(options) {
+        var channel, type, params, querypart, _ref4, apps;
+
+        return _regenerator2.default.wrap(function _callee3$(_context3) {
+          while (1) {
+            switch (_context3.prev = _context3.next) {
+              case 0:
+                channel = options.channel, type = options.type;
+                params = {
+                  limit: 200,
+                  versionsChannel: channel,
+                  latestChannelVersion: channel
+                };
+                querypart = new URLSearchParams(params).toString();
+
+                if (type) {
+                  // Unfortunately, URLSearchParams encodes brackets so we have to do
+                  // the querypart handling manually
+                  querypart = querypart + ('&filter[type]=' + type);
+                }
+                _context3.next = 6;
+                return this.client.stackClient.fetchJSON('GET', '/registry?' + querypart);
+
+              case 6:
+                _ref4 = _context3.sent;
+                apps = _ref4.data;
+                return _context3.abrupt('return', apps);
+
+              case 9:
+              case 'end':
+                return _context3.stop();
+            }
+          }
+        }, _callee3, this);
+      }));
+
+      function fetchApps(_x4) {
+        return _ref3.apply(this, arguments);
+      }
+
+      return fetchApps;
+    }()
+  }]);
+  return Registry;
+}();
+
+exports.default = Registry;
 
 /***/ }),
 
@@ -11948,6 +12379,166 @@ var getQueryFromSlice = exports.getQueryFromSlice = function getQueryFromSlice(s
     data: mapIdsToDocuments(documents, query.definition.doctype, query.data)
   }) : query;
 };
+
+/***/ }),
+
+/***/ "./node_modules/cozy-client/dist/terms.js":
+/*!************************************************!*\
+  !*** ./node_modules/cozy-client/dist/terms.js ***!
+  \************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+
+var _regenerator = __webpack_require__(/*! babel-runtime/regenerator */ "./node_modules/babel-runtime/regenerator/index.js");
+
+var _regenerator2 = _interopRequireDefault(_regenerator);
+
+var _extends2 = __webpack_require__(/*! babel-runtime/helpers/extends */ "./node_modules/babel-runtime/helpers/extends.js");
+
+var _extends3 = _interopRequireDefault(_extends2);
+
+var _objectWithoutProperties2 = __webpack_require__(/*! babel-runtime/helpers/objectWithoutProperties */ "./node_modules/babel-runtime/helpers/objectWithoutProperties.js");
+
+var _objectWithoutProperties3 = _interopRequireDefault(_objectWithoutProperties2);
+
+var _asyncToGenerator2 = __webpack_require__(/*! babel-runtime/helpers/asyncToGenerator */ "./node_modules/babel-runtime/helpers/asyncToGenerator.js");
+
+var _asyncToGenerator3 = _interopRequireDefault(_asyncToGenerator2);
+
+/* TODO Use collection terms */
+var save = function () {
+  var _ref = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee(client, terms) {
+    var id, termsAttributes, _ref2, savedTermsDocs, savedTerms, termsToSave, _termsToSave;
+
+    return _regenerator2.default.wrap(function _callee$(_context) {
+      while (1) {
+        switch (_context.prev = _context.next) {
+          case 0:
+            id = terms.id, termsAttributes = (0, _objectWithoutProperties3.default)(terms, ['id']);
+            _context.next = 3;
+            return client.query({
+              doctype: TERMS_DOCTYPE,
+              selector: {
+                termsId: id,
+                version: termsAttributes.version
+              },
+              limit: 1
+            });
+
+          case 3:
+            _ref2 = _context.sent;
+            savedTermsDocs = _ref2.data;
+
+            if (!(savedTermsDocs && savedTermsDocs.length)) {
+              _context.next = 13;
+              break;
+            }
+
+            // we just update the url if this is the same id and same version
+            // but the url changed
+            savedTerms = savedTermsDocs[0];
+
+            if (!(savedTerms.termsId == id && savedTerms.version == termsAttributes.version && savedTerms.url != termsAttributes.url)) {
+              _context.next = 11;
+              break;
+            }
+
+            termsToSave = (0, _extends3.default)({
+              _type: TERMS_DOCTYPE
+            }, savedTerms, {
+              url: termsAttributes.url
+            });
+            _context.next = 11;
+            return client.save(termsToSave);
+
+          case 11:
+            _context.next = 16;
+            break;
+
+          case 13:
+            _termsToSave = (0, _extends3.default)({
+              _type: TERMS_DOCTYPE
+            }, termsAttributes, {
+              termsId: id,
+              accepted: true,
+              acceptedAt: new Date()
+            });
+            _context.next = 16;
+            return client.save(_termsToSave);
+
+          case 16:
+          case 'end':
+            return _context.stop();
+        }
+      }
+    }, _callee, this);
+  }));
+
+  return function save(_x, _x2) {
+    return _ref.apply(this, arguments);
+  };
+}();
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+var TERMS_DOCTYPE = 'io.cozy.terms';exports.default = {
+  save: save
+};
+
+/***/ }),
+
+/***/ "./node_modules/cozy-client/dist/utils.js":
+/*!************************************************!*\
+  !*** ./node_modules/cozy-client/dist/utils.js ***!
+  \************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.cancelable = undefined;
+
+var _promise = __webpack_require__(/*! babel-runtime/core-js/promise */ "./node_modules/babel-runtime/core-js/promise.js");
+
+var _promise2 = _interopRequireDefault(_promise);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/**
+ * Wraps a promise so that it can be canceled
+ *
+ * Rejects with canceled: true as soon as cancel is called
+ *
+ * @param  {Promise} promise
+ * @return {AugmentedPromise} - Promise with .cancel method
+ */
+var cancelable = function cancelable(promise) {
+  var _reject = void 0;
+  var wrapped = new _promise2.default(function (resolve, reject) {
+    _reject = reject;
+    promise.then(resolve);
+    promise.catch(reject);
+  });
+
+  wrapped.cancel = function () {
+    _reject({ canceled: true });
+  };
+
+  return wrapped;
+};
+
+exports.cancelable = cancelable;
 
 /***/ }),
 
@@ -16607,6 +17198,12 @@ exports.removeQueryString = removeQueryString;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+Object.defineProperty(exports, "default", {
+  enumerable: true,
+  get: function get() {
+    return _intents.default;
+  }
+});
 Object.defineProperty(exports, "Intents", {
   enumerable: true,
   get: function get() {
@@ -17456,9 +18053,10 @@ function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _d
 
 function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
 
-var minilog = typeof window !== undefined && window.minilog || _minilog.default;
-var logger = minilog('cozy-realtime');
-minilog.suggest.deny('cozy-realtime', 'info');
+var logger = (0, _minilog.default)('cozy-realtime');
+
+_minilog.default.suggest.deny('cozy-realtime', 'info');
+
 var INDEX_KEY_SEPARATOR = '//';
 /**
  * Generate a key for an event
@@ -17751,7 +18349,6 @@ function () {
 
       for (var _i2 = 0; _i2 < keys.length; _i2++) {
         var key = keys[_i2];
-        logger.debug('Emitting', key, doc);
         this.emit(key, doc);
       }
     }
@@ -19797,11 +20394,12 @@ var _extends3 = _interopRequireDefault(_extends2);
 
 var _templateObject = (0, _taggedTemplateLiteral3.default)(['/data/', '/', '/relationships/references'], ['/data/', '/', '/relationships/references']),
     _templateObject2 = (0, _taggedTemplateLiteral3.default)(['/files/', ''], ['/files/', '']),
-    _templateObject3 = (0, _taggedTemplateLiteral3.default)(['/files/', '?Name=', '&Type=file&Executable=', ''], ['/files/', '?Name=', '&Type=file&Executable=', '']),
-    _templateObject4 = (0, _taggedTemplateLiteral3.default)(['/files/downloads?Id=', ''], ['/files/downloads?Id=', '']),
-    _templateObject5 = (0, _taggedTemplateLiteral3.default)(['/files/downloads?Path=', ''], ['/files/downloads?Path=', '']),
-    _templateObject6 = (0, _taggedTemplateLiteral3.default)(['/files/metadata?Path=', ''], ['/files/metadata?Path=', '']),
-    _templateObject7 = (0, _taggedTemplateLiteral3.default)(['/files/', '?Name=', '&Type=directory'], ['/files/', '?Name=', '&Type=directory']);
+    _templateObject3 = (0, _taggedTemplateLiteral3.default)(['/files/trash/', ''], ['/files/trash/', '']),
+    _templateObject4 = (0, _taggedTemplateLiteral3.default)(['/files/', '?Name=', '&Type=file&Executable=', ''], ['/files/', '?Name=', '&Type=file&Executable=', '']),
+    _templateObject5 = (0, _taggedTemplateLiteral3.default)(['/files/downloads?Id=', ''], ['/files/downloads?Id=', '']),
+    _templateObject6 = (0, _taggedTemplateLiteral3.default)(['/files/downloads?Path=', ''], ['/files/downloads?Path=', '']),
+    _templateObject7 = (0, _taggedTemplateLiteral3.default)(['/files/metadata?Path=', ''], ['/files/metadata?Path=', '']),
+    _templateObject8 = (0, _taggedTemplateLiteral3.default)(['/files/', '?Name=', '&Type=directory'], ['/files/', '?Name=', '&Type=directory']);
 
 var _mimeTypes = __webpack_require__(/*! mime-types */ "./node_modules/cozy-stack-client/node_modules/mime-types/index.js");
 
@@ -20126,6 +20724,21 @@ var FileCollection = function (_DocumentCollection) {
 
       return destroy;
     }()
+
+    /**
+     * Restores a trashed file.
+     *
+     * @param {string} id   - The file's id
+     * @returns {Promise}   - A promise that returns the restored file if resolved.
+     * @throws {FetchError}
+     *
+     */
+
+  }, {
+    key: 'restore',
+    value: function restore(id) {
+      return this.stackClient.fetchJSON('POST', (0, _utils.uri)(_templateObject3, id));
+    }
   }, {
     key: 'upload',
     value: function () {
@@ -20178,23 +20791,62 @@ var FileCollection = function (_DocumentCollection) {
       if (executable === undefined) {
         executable = false;
       }
-      var path = (0, _utils.uri)(_templateObject3, dirId, name, executable);
+      var path = (0, _utils.uri)(_templateObject4, dirId, name, executable);
       return this.doUpload(data, path, options);
+    }
+
+    /**
+     * updateFile - Updates a file's data
+     *
+     * @param  {object}  data               Javascript File object
+     * @param  {object}  params             Additional parameters
+     * @param  {string}  params.fileId      The id of the file to update (required)
+     * @param  {boolean} params.executable  Whether the file is executable or not
+     * @param  {object}  params.options     Options to pass to doUpload method (additional headers)
+     * @return {object}                     Updated document
+     */
+
+  }, {
+    key: 'updateFile',
+    value: function updateFile(data) {
+      var _ref11 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+
+      var _ref11$executable = _ref11.executable,
+          executable = _ref11$executable === undefined ? false : _ref11$executable,
+          fileId = _ref11.fileId,
+          options = (0, _objectWithoutProperties3.default)(_ref11, ['executable', 'fileId']);
+
+      if (!fileId || typeof fileId !== 'string') {
+        throw new Error('missing fileId argument');
+      }
+
+      // handle case where data is a file and contains the name
+      if (typeof data.name !== 'string') {
+        throw new Error('missing name in data argument');
+      }
+
+      var name = sanitizeFileName(data.name);
+      if (typeof name !== 'string' || name === '') {
+        throw new Error('missing name argument');
+      }
+
+      var path = (0, _utils.uri)(_templateObject4, fileId, name, executable);
+      return this.doUpload(data, path, options, 'PUT');
     }
   }, {
     key: 'getDownloadLinkById',
     value: function getDownloadLinkById(id) {
-      return this.stackClient.fetchJSON('POST', (0, _utils.uri)(_templateObject4, id)).then(this.extractResponseLinkRelated);
+      return this.stackClient.fetchJSON('POST', (0, _utils.uri)(_templateObject5, id)).then(this.extractResponseLinkRelated);
     }
   }, {
     key: 'getDownloadLinkByPath',
     value: function getDownloadLinkByPath(path) {
-      return this.stackClient.fetchJSON('POST', (0, _utils.uri)(_templateObject5, path)).then(this.extractResponseLinkRelated);
+      return this.stackClient.fetchJSON('POST', (0, _utils.uri)(_templateObject6, path)).then(this.extractResponseLinkRelated);
     }
   }, {
     key: 'download',
     value: function () {
-      var _ref11 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee5(file) {
+      var _ref12 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee5(file) {
         var href;
         return _regenerator2.default.wrap(function _callee5$(_context5) {
           while (1) {
@@ -20216,8 +20868,8 @@ var FileCollection = function (_DocumentCollection) {
         }, _callee5, this);
       }));
 
-      function download(_x10) {
-        return _ref11.apply(this, arguments);
+      function download(_x11) {
+        return _ref12.apply(this, arguments);
       }
 
       return download;
@@ -20225,7 +20877,7 @@ var FileCollection = function (_DocumentCollection) {
   }, {
     key: 'downloadArchive',
     value: function () {
-      var _ref12 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee6(fileIds) {
+      var _ref13 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee6(fileIds) {
         var notSecureFilename = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 'files';
         var filename, href, fullpath;
         return _regenerator2.default.wrap(function _callee6$(_context6) {
@@ -20250,8 +20902,8 @@ var FileCollection = function (_DocumentCollection) {
         }, _callee6, this);
       }));
 
-      function downloadArchive(_x12) {
-        return _ref12.apply(this, arguments);
+      function downloadArchive(_x13) {
+        return _ref13.apply(this, arguments);
       }
 
       return downloadArchive;
@@ -20259,7 +20911,7 @@ var FileCollection = function (_DocumentCollection) {
   }, {
     key: 'getArchiveLinkByIds',
     value: function () {
-      var _ref13 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee7(ids) {
+      var _ref14 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee7(ids) {
         var name = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 'files';
         var resp;
         return _regenerator2.default.wrap(function _callee7$(_context7) {
@@ -20289,8 +20941,8 @@ var FileCollection = function (_DocumentCollection) {
         }, _callee7, this);
       }));
 
-      function getArchiveLinkByIds(_x14) {
-        return _ref13.apply(this, arguments);
+      function getArchiveLinkByIds(_x15) {
+        return _ref14.apply(this, arguments);
       }
 
       return getArchiveLinkByIds;
@@ -20298,7 +20950,7 @@ var FileCollection = function (_DocumentCollection) {
   }, {
     key: 'statById',
     value: function () {
-      var _ref14 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee8(id) {
+      var _ref15 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee8(id) {
         var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
         var limit, _options$skip2, skip, params, url, path, resp;
@@ -20334,8 +20986,8 @@ var FileCollection = function (_DocumentCollection) {
         }, _callee8, this);
       }));
 
-      function statById(_x16) {
-        return _ref14.apply(this, arguments);
+      function statById(_x17) {
+        return _ref15.apply(this, arguments);
       }
 
       return statById;
@@ -20343,14 +20995,14 @@ var FileCollection = function (_DocumentCollection) {
   }, {
     key: 'statByPath',
     value: function () {
-      var _ref15 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee9(path) {
+      var _ref16 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee9(path) {
         var resp;
         return _regenerator2.default.wrap(function _callee9$(_context9) {
           while (1) {
             switch (_context9.prev = _context9.next) {
               case 0:
                 _context9.next = 2;
-                return this.stackClient.fetchJSON('GET', (0, _utils.uri)(_templateObject6, path));
+                return this.stackClient.fetchJSON('GET', (0, _utils.uri)(_templateObject7, path));
 
               case 2:
                 resp = _context9.sent;
@@ -20369,8 +21021,8 @@ var FileCollection = function (_DocumentCollection) {
         }, _callee9, this);
       }));
 
-      function statByPath(_x17) {
-        return _ref15.apply(this, arguments);
+      function statByPath(_x18) {
+        return _ref16.apply(this, arguments);
       }
 
       return statByPath;
@@ -20378,7 +21030,7 @@ var FileCollection = function (_DocumentCollection) {
   }, {
     key: 'createDirectory',
     value: function () {
-      var _ref16 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee10() {
+      var _ref17 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee10() {
         var attributes = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
         var name, dirId, lastModifiedDate, safeName, lastModified, resp;
         return _regenerator2.default.wrap(function _callee10$(_context10) {
@@ -20398,7 +21050,7 @@ var FileCollection = function (_DocumentCollection) {
               case 4:
                 lastModified = lastModifiedDate && (typeof lastModifiedDate === 'string' ? new Date(lastModifiedDate) : lastModifiedDate);
                 _context10.next = 7;
-                return this.stackClient.fetchJSON('POST', (0, _utils.uri)(_templateObject7, dirId, safeName), undefined, {
+                return this.stackClient.fetchJSON('POST', (0, _utils.uri)(_templateObject8, dirId, safeName), undefined, {
                   headers: {
                     Date: lastModified ? lastModified.toGMTString() : ''
                   }
@@ -20419,7 +21071,7 @@ var FileCollection = function (_DocumentCollection) {
       }));
 
       function createDirectory() {
-        return _ref16.apply(this, arguments);
+        return _ref17.apply(this, arguments);
       }
 
       return createDirectory;
@@ -20427,7 +21079,7 @@ var FileCollection = function (_DocumentCollection) {
   }, {
     key: 'ensureDirectoryExists',
     value: function () {
-      var _ref17 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee11(path) {
+      var _ref18 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee11(path) {
         var resp;
         return _regenerator2.default.wrap(function _callee11$(_context11) {
           while (1) {
@@ -20457,8 +21109,8 @@ var FileCollection = function (_DocumentCollection) {
         }, _callee11, this);
       }));
 
-      function ensureDirectoryExists(_x19) {
-        return _ref17.apply(this, arguments);
+      function ensureDirectoryExists(_x20) {
+        return _ref18.apply(this, arguments);
       }
 
       return ensureDirectoryExists;
@@ -20466,7 +21118,7 @@ var FileCollection = function (_DocumentCollection) {
   }, {
     key: 'getDirectoryOrCreate',
     value: function () {
-      var _ref18 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee12(name, parentDirectory) {
+      var _ref19 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee12(name, parentDirectory) {
         var safeName, path, stat, parsedError, errors;
         return _regenerator2.default.wrap(function _callee12$(_context12) {
           while (1) {
@@ -20517,8 +21169,8 @@ var FileCollection = function (_DocumentCollection) {
         }, _callee12, this, [[4, 11]]);
       }));
 
-      function getDirectoryOrCreate(_x20, _x21) {
-        return _ref18.apply(this, arguments);
+      function getDirectoryOrCreate(_x21, _x22) {
+        return _ref19.apply(this, arguments);
       }
 
       return getDirectoryOrCreate;
@@ -20534,7 +21186,7 @@ var FileCollection = function (_DocumentCollection) {
   }, {
     key: 'createDirectoryByPath',
     value: function () {
-      var _ref19 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee13(path) {
+      var _ref20 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee13(path) {
         var parts, root, parentDir, _iteratorNormalCompletion2, _didIteratorError2, _iteratorError2, _iterator2, _step2, part;
 
         return _regenerator2.default.wrap(function _callee13$(_context13) {
@@ -20628,8 +21280,8 @@ var FileCollection = function (_DocumentCollection) {
         }, _callee13, this, [[10, 22, 26, 34], [27,, 29, 33]]);
       }));
 
-      function createDirectoryByPath(_x22) {
-        return _ref19.apply(this, arguments);
+      function createDirectoryByPath(_x23) {
+        return _ref20.apply(this, arguments);
       }
 
       return createDirectoryByPath;
@@ -20646,7 +21298,7 @@ var FileCollection = function (_DocumentCollection) {
   }, {
     key: 'updateFileMetadata',
     value: function () {
-      var _ref20 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee14(id, attributes) {
+      var _ref21 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee14(id, attributes) {
         var resp;
         return _regenerator2.default.wrap(function _callee14$(_context14) {
           while (1) {
@@ -20675,8 +21327,8 @@ var FileCollection = function (_DocumentCollection) {
         }, _callee14, this);
       }));
 
-      function updateFileMetadata(_x23, _x24) {
-        return _ref20.apply(this, arguments);
+      function updateFileMetadata(_x24, _x25) {
+        return _ref21.apply(this, arguments);
       }
 
       return updateFileMetadata;
@@ -20684,8 +21336,10 @@ var FileCollection = function (_DocumentCollection) {
   }, {
     key: 'doUpload',
     value: function () {
-      var _ref21 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee15(data, path, options) {
-        var isBuffer, isFile, isBlob, isStream, isString, _ref22, contentType, contentLength, checksum, lastModifiedDate, ifMatch, headers, resp;
+      var _ref22 = (0, _asyncToGenerator3.default)( /*#__PURE__*/_regenerator2.default.mark(function _callee15(data, path, options) {
+        var method = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : 'POST';
+
+        var isBuffer, isFile, isBlob, isStream, isString, _ref23, contentType, contentLength, checksum, lastModifiedDate, ifMatch, headers, resp;
 
         return _regenerator2.default.wrap(function _callee15$(_context15) {
           while (1) {
@@ -20718,7 +21372,7 @@ var FileCollection = function (_DocumentCollection) {
                 throw new Error('invalid data type');
 
               case 10:
-                _ref22 = options || {}, contentType = _ref22.contentType, contentLength = _ref22.contentLength, checksum = _ref22.checksum, lastModifiedDate = _ref22.lastModifiedDate, ifMatch = _ref22.ifMatch;
+                _ref23 = options || {}, contentType = _ref23.contentType, contentLength = _ref23.contentLength, checksum = _ref23.checksum, lastModifiedDate = _ref23.lastModifiedDate, ifMatch = _ref23.ifMatch;
 
                 if (!contentType) {
                   if (isBuffer) {
@@ -20751,7 +21405,7 @@ var FileCollection = function (_DocumentCollection) {
                 if (ifMatch) headers['If-Match'] = ifMatch;
 
                 _context15.next = 20;
-                return this.stackClient.fetchJSON('POST', path, data, {
+                return this.stackClient.fetchJSON(method, path, data, {
                   headers: headers
                 });
 
@@ -20769,8 +21423,8 @@ var FileCollection = function (_DocumentCollection) {
         }, _callee15, this);
       }));
 
-      function doUpload(_x25, _x26, _x27) {
-        return _ref21.apply(this, arguments);
+      function doUpload(_x27, _x28, _x29) {
+        return _ref22.apply(this, arguments);
       }
 
       return doUpload;
@@ -21033,6 +21687,9 @@ var OAuthClient = function (_CozyStackClient) {
     var _this = (0, _possibleConstructorReturn3.default)(this, (OAuthClient.__proto__ || (0, _getPrototypeOf2.default)(OAuthClient)).call(this, options));
 
     _this.setOAuthOptions((0, _extends3.default)({}, defaultoauthOptions, oauth));
+    if (oauth.token) {
+      _this.setToken(oauth.token);
+    }
     _this.scope = scope;
     _this.onTokenRefresh = onTokenRefresh;
     return _this;
@@ -24551,6 +25208,7 @@ var map = {
 	"./eye-closed.svg": "./node_modules/cozy-ui/assets/icons/ui/eye-closed.svg",
 	"./eye.svg": "./node_modules/cozy-ui/assets/icons/ui/eye.svg",
 	"./file-none.svg": "./node_modules/cozy-ui/assets/icons/ui/file-none.svg",
+	"./file-outline.svg": "./node_modules/cozy-ui/assets/icons/ui/file-outline.svg",
 	"./file.svg": "./node_modules/cozy-ui/assets/icons/ui/file.svg",
 	"./folder.svg": "./node_modules/cozy-ui/assets/icons/ui/folder.svg",
 	"./forward.svg": "./node_modules/cozy-ui/assets/icons/ui/forward.svg",
@@ -25226,8 +25884,8 @@ __webpack_require__.r(__webpack_exports__);
 var symbol = new svg_baker_runtime_browser_symbol__WEBPACK_IMPORTED_MODULE_0___default.a({
   "id": "dash",
   "use": "dash-usage",
-  "viewBox": "0 0 20 20",
-  "content": "<symbol xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 20 20\" id=\"dash\"><path d=\"M3.497 10h13.006\" stroke=\"currentColor\" stroke-width=\"2\" /></symbol>"
+  "viewBox": "0 0 16 16",
+  "content": "<symbol xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 16\" id=\"dash\">\n    <path fill-rule=\"evenodd\" d=\"M2 7h12a1 1 0 0 1 0 2H2a1 1 0 1 1 0-2z\" />\n</symbol>"
 });
 var result = svg_sprite_loader_runtime_browser_sprite_build__WEBPACK_IMPORTED_MODULE_1___default.a.add(symbol);
 /* harmony default export */ __webpack_exports__["default"] = (symbol);
@@ -25488,6 +26146,32 @@ var symbol = new svg_baker_runtime_browser_symbol__WEBPACK_IMPORTED_MODULE_0___d
   "use": "file-none-usage",
   "viewBox": "0 0 16 16",
   "content": "<symbol xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" viewBox=\"0 0 16 16\" id=\"file-none\">\n  <defs>\n    <path id=\"file-none_file-none-a\" d=\"M10,5.0999 L10,2 L4,2 C3.45,2 3,2.45 3,3 L3,13 C3,13.55 3.45,14 4,14 L12,14 C12.55,14 13,13.55 13,13 L13,6 L11.1001,6 L11.5,6.3999 L9.4,8.4999 L11.5,10.5999 L10.1,11.9999 L8,9.8999 L5.9,11.9999 L4.5,10.5999 L6.6,8.4999 L4.5,6.3999 L5.9,4.9999 L8,7.0999 L10,5.0999 Z M15,5 L15,15.004 C15,15.555 14.55,16 13.993,16 L2.007,16 C1.451,16 1,15.556 1,14.999 L1,1.001 C1,0.448 1.446,0 1.998,0 L10,0 L11,0 L15,4 L15,5 Z\" />\n  </defs>\n  <g fill-rule=\"evenodd\">\n    <use xlink:href=\"#file-none_file-none-a\" />\n  </g>\n</symbol>"
+});
+var result = svg_sprite_loader_runtime_browser_sprite_build__WEBPACK_IMPORTED_MODULE_1___default.a.add(symbol);
+/* harmony default export */ __webpack_exports__["default"] = (symbol);
+
+/***/ }),
+
+/***/ "./node_modules/cozy-ui/assets/icons/ui/file-outline.svg":
+/*!***************************************************************!*\
+  !*** ./node_modules/cozy-ui/assets/icons/ui/file-outline.svg ***!
+  \***************************************************************/
+/*! exports provided: default */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony import */ var svg_baker_runtime_browser_symbol__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! svg-baker-runtime/browser-symbol */ "./node_modules/svg-baker-runtime/browser-symbol.js");
+/* harmony import */ var svg_baker_runtime_browser_symbol__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(svg_baker_runtime_browser_symbol__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var svg_sprite_loader_runtime_browser_sprite_build__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! svg-sprite-loader/runtime/browser-sprite.build */ "./node_modules/svg-sprite-loader/runtime/browser-sprite.build.js");
+/* harmony import */ var svg_sprite_loader_runtime_browser_sprite_build__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(svg_sprite_loader_runtime_browser_sprite_build__WEBPACK_IMPORTED_MODULE_1__);
+
+
+var symbol = new svg_baker_runtime_browser_symbol__WEBPACK_IMPORTED_MODULE_0___default.a({
+  "id": "file-outline",
+  "use": "file-outline-usage",
+  "viewBox": "0 0 16 16",
+  "content": "<symbol xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 16\" id=\"file-outline\">\n    <path fill-rule=\"evenodd\" d=\"M13 5h-3V2H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h8c.55 0 1-.45 1-1V5zm2-.999v11.003a1 1 0 0 1-1.007.996H2.007A1.001 1.001 0 0 1 1 14.999V1.001A.999.999 0 0 1 1.998 0H11l4 4.001z\" />\n</symbol>"
 });
 var result = svg_sprite_loader_runtime_browser_sprite_build__WEBPACK_IMPORTED_MODULE_1___default.a.add(symbol);
 /* harmony default export */ __webpack_exports__["default"] = (symbol);
@@ -26554,6 +27238,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _palette__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ../palette */ "./node_modules/cozy-ui/transpiled/react/palette.js");
 /* harmony import */ var _palette__WEBPACK_IMPORTED_MODULE_11___default = /*#__PURE__*/__webpack_require__.n(_palette__WEBPACK_IMPORTED_MODULE_11__);
 /* harmony import */ var _Preloader__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./Preloader */ "./node_modules/cozy-ui/transpiled/react/AppIcon/Preloader.js");
+/* harmony import */ var _proptypes__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ../proptypes */ "./node_modules/cozy-ui/transpiled/react/proptypes.js");
 
 
 
@@ -26570,6 +27255,7 @@ var styles = {
   "c-app-icon": "styles__c-app-icon___2_O40",
   "c-app-icon-default": "styles__c-app-icon-default___3CEmt"
 };
+
 
 
 
@@ -26706,10 +27392,14 @@ function (_Component) {
 }(react__WEBPACK_IMPORTED_MODULE_7__["Component"]);
 AppIcon.propTypes = {
   alt: prop_types__WEBPACK_IMPORTED_MODULE_8___default.a.string,
-  app: prop_types__WEBPACK_IMPORTED_MODULE_8___default.a.oneOfType([prop_types__WEBPACK_IMPORTED_MODULE_8___default.a.object, prop_types__WEBPACK_IMPORTED_MODULE_8___default.a.string]),
+
+  /** Required if fetchIcon is not provided */
+  app: prop_types__WEBPACK_IMPORTED_MODULE_8___default.a.oneOfType([_proptypes__WEBPACK_IMPORTED_MODULE_13__["AppDoctype"], prop_types__WEBPACK_IMPORTED_MODULE_8___default.a.string]),
+
+  /** Custom implementation of how to fetch icon */
+  fetchIcon: prop_types__WEBPACK_IMPORTED_MODULE_8___default.a.func,
   className: prop_types__WEBPACK_IMPORTED_MODULE_8___default.a.string,
   domain: prop_types__WEBPACK_IMPORTED_MODULE_8___default.a.string,
-  fetchIcon: prop_types__WEBPACK_IMPORTED_MODULE_8___default.a.func,
   onReady: prop_types__WEBPACK_IMPORTED_MODULE_8___default.a.func,
   secure: prop_types__WEBPACK_IMPORTED_MODULE_8___default.a.bool
 };
@@ -27428,14 +28118,14 @@ function (_Component) {
           dictRequire = props.dictRequire,
           context = props.context,
           defaultLang = props.defaultLang;
-      this.translation = polyglot || Object(_translation__WEBPACK_IMPORTED_MODULE_10__["initTranslation"])(lang, dictRequire, context, defaultLang);
+      this.translator = polyglot || Object(_translation__WEBPACK_IMPORTED_MODULE_10__["initTranslation"])(lang, dictRequire, context, defaultLang);
       this.format = Object(_format__WEBPACK_IMPORTED_MODULE_11__["initFormat"])(lang, defaultLang);
     }
   }, {
     key: "getChildContext",
     value: function getChildContext() {
       return {
-        t: this.translation.t.bind(this.translation),
+        t: this.translator.t.bind(this.translator),
         f: this.format,
         lang: this.props.lang
       };
@@ -27594,7 +28284,7 @@ var IconSprite = function IconSprite() {
 
 // GENERATED FILE, DO NOT EDIT THIS FILE BY HAND
 // Use yarn sprite to regenerate
-module.exports = "<svg><defs>\n        <path d=\"M164,261 C164,258.790861 165.790861,257 168,257 C170.209139,257 172,258.790861 172,261 C174.209139,261 176,262.790861 176,265 C176,267.209139 174.209139,269 172,269 L164,269 C161.790861,269 160,267.209139 160,265 C160,262.790861 161.790861,261 164,261 Z M165.146447,264.853553 C165.300738,265.007845 165.568968,265.222429 165.939431,265.434122 C166.557029,265.787035 167.249166,266 168,266 C168.750834,266 169.442971,265.787035 170.060569,265.434122 C170.431032,265.222429 170.699262,265.007845 170.853553,264.853553 C171.048816,264.658291 171.048816,264.341709 170.853553,264.146447 C170.658291,263.951184 170.341709,263.951184 170.146447,264.146447 C170.050738,264.242155 169.850218,264.402571 169.564431,264.565878 C169.088279,264.837965 168.561666,265 168,265 C167.438334,265 166.911721,264.837965 166.435569,264.565878 C166.149782,264.402571 165.949262,264.242155 165.853553,264.146447 C165.658291,263.951184 165.341709,263.951184 165.146447,264.146447 C164.951184,264.341709 164.951184,264.658291 165.146447,264.853553 Z\" id=\"path-1\"/>\n    \n        <path d=\"M8,2 C11.637,2 14.742,4.488 16,8 C14.742,11.512 11.637,14 8,14 C4.363,14 1.258,11.512 0,8 C1.258,4.488 4.363,2 8,2 Z M8,12 C10.209,12 12,10.209 12,8 C12,5.791 10.209,4 8,4 C5.791,4 4,5.791 4,8 C4,10.209 5.791,12 8,12 Z M8,6 C9.104,6 10,6.896 10,8 C10,9.104 9.104,10 8,10 C6.896,10 6,9.104 6,8 C6,6.896 6.896,6 8,6 Z\" id=\"path-1\"/>\n    \n    <path id=\"file-none-a\" d=\"M10,5.0999 L10,2 L4,2 C3.45,2 3,2.45 3,3 L3,13 C3,13.55 3.45,14 4,14 L12,14 C12.55,14 13,13.55 13,13 L13,6 L11.1001,6 L11.5,6.3999 L9.4,8.4999 L11.5,10.5999 L10.1,11.9999 L8,9.8999 L5.9,11.9999 L4.5,10.5999 L6.6,8.4999 L4.5,6.3999 L5.9,4.9999 L8,7.0999 L10,5.0999 Z M15,5 L15,15.004 C15,15.555 14.55,16 13.993,16 L2.007,16 C1.451,16 1,15.556 1,14.999 L1,1.001 C1,0.448 1.446,0 1.998,0 L10,0 L11,0 L15,4 L15,5 Z\"/>\n  \n    <path id=\"file-a\" d=\"M1,1.00087166 C1,0.448105505 1.4463114,0 1.99754465,0 L10,0 L10,5 L15,5 L15,15.0044225 C15,15.5542648 14.5500512,16 13.9931545,16 L2.00684547,16 C1.45078007,16 1,15.5553691 1,14.9991283 L1,1.00087166 Z M11,4 L11,0 L15,4 L11,4 Z\"/>\n  <path d=\"M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16zm1-7.198C10.122 8.355 11 7.21 11 6c0-1.552-1.448-3-3-3S5 4.448 5 6h2c0-.448.552-1 1-1 .448 0 1 .552 1 1 0 .448-.552 1-1 1a1 1 0 0 0-1 1v2h2V8.802zM7 11v2h2v-2H7z\" id=\"a\"/>\n        <path d=\"M8,12.038 C5.791,12.038 4,10.247 4,8.03800005 C4,7.45100005 4.134,6.89700005 4.361,6.39500005 L6,8.03400005 L6,8.03800005 C6,9.14200005 6.896,10.038 8,10.038 C8.001,10.038 8.003,10.038 8.004,10.038 L9.644,11.677 C9.141,11.904 8.587,12.038 8,12.038 Z M1.115,1.20000005 L13.842,13.905 L12.856,14.891 L11.296,13.329 C10.362,13.757 9.276,14.038 8,14.038 C2,14.038 0,8.03800005 0,8.03800005 C0,8.03800005 0.662,6.06900005 2.353,4.38600005 L0.141,2.17500005 L1.115,1.20000005 Z M6.3105,4.42470005 L4.6515,2.76570005 C5.5945,2.32370005 6.7005,2.03770005 7.9995,2.03770005 C13.9995,2.03770005 15.9995,8.03770005 15.9995,8.03770005 C15.9995,8.03770005 15.3285,10.0347 13.6105,11.7247 L11.6135,9.72770005 C11.8545,9.21270005 11.9995,8.64470005 11.9995,8.03770005 C11.9995,5.82870005 10.2085,4.03770005 7.9995,4.03770005 C7.3935,4.03770005 6.8255,4.18270005 6.3105,4.42470005 Z M8,6.03800005 C9.104,6.03800005 10,6.93400005 10,8.03800005 C10,8.06200005 9.994,8.08400005 9.993,8.10700005 L7.931,6.04500005 C7.954,6.04400005 7.977,6.03800005 8,6.03800005 Z\" id=\"path-1\"/>\n    \n    <path id=\"hourglass-a\" d=\"M4.4997,13 C4.4997,12.453 4.8397,11.709 5.2597,11.349 L7.9997,9 L10.7407,11.349 C11.1637,11.712 11.4997,12.447 11.4997,13 L4.4997,13 Z M11.4997,3 C11.4997,3.547 11.1597,4.292 10.7407,4.651 L10.3327,5 L5.6667,5 L5.2597,4.651 C4.8357,4.288 4.4997,3.552 4.4997,3 L11.4997,3 Z M12.9997,13 C12.9997,12.443 12.6837,11.684 12.2937,11.294 L8.9997,8 L12.2937,4.706 C12.6837,4.316 12.9997,3.556 12.9997,3 L12.9997,2 C13.5507,2 13.9997,1.556 13.9997,1 C13.9997,0.448 13.5437,0 12.9977,0 L3.0027,0 C2.4487,0 1.9997,0.444 1.9997,1 C1.9997,1.552 2.4557,2 3.0027,2 L2.9997,3 C2.9997,3.552 3.3127,4.312 3.7057,4.706 L6.9997,8 L3.7057,11.294 C3.3127,11.688 2.9997,12.447 2.9997,13 L2.9997,14 C2.4557,14 1.9997,14.447 1.9997,15 C1.9997,15.556 2.4487,16 3.0027,16 L12.9977,16 C13.5437,16 13.9997,15.553 13.9997,15 C13.9997,14.443 13.5507,14 12.9977,14 L12.9997,13 Z\"/>\n  <path id=\"info\" d=\"M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16zM7 4a1 1 0 1 0 2 0 1 1 0 1 0-2 0zm1 2H6v2h1v4a1 1 0 0 0 1 1h2v-2H9V7a1 1 0 0 0-1-1z\"/>\n    <path id=\"pen\" d=\"M9.5 3.5l3 3L3.04 16H0v-2.97L9.5 3.5zM14.91.92l.18.17c.77.78.78 2.05 0 2.84L14.03 5 11 2 12.09.91a2 2 0 0 1 2.82 0z\"/>\n  \n    <polygon id=\"plus-a\" points=\"7 0 9 0 9 7 16 7 16 9 9 9 9 16 7 16 7 9 0 9 0 7 7 7\"/>\n  \n        <path id=\"plus-small\" d=\"M4 4V1a1 1 0 1 1 2 0v3h3a1 1 0 1 1 0 2H6v3a1 1 0 1 1-2 0V6H1a1 1 0 1 1 0-2h3z\"/>\n    </defs><symbol id=\"album-add\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M65,99.0094776 C65,97.347389 66.3423789,96 68.0033512,96 L77.9931545,96 C78.5492199,96 79,96.4438648 79,97 C79,97.5522847 78.544239,98 77.9975267,98 L68.0024733,98 C67.4488226,98 67,98.4438648 67,99 C67,99.5522847 67.455761,100 68.0024733,100 L77.9975267,100 C78.5511774,100 79,100.455761 79,101.002473 L79,110.997527 C79,111.551177 78.5500512,112 77.9931545,112 L68.0033512,112 C66.3446462,112 65,110.663369 65,108.990522 L65,99.0094776 Z M72,102 L74,102 L74,105 L77,105 L77,107 L74,107 L74,110 L72,110 L72,107 L69,107 L69,105 L72,105 L72,102 Z\" transform=\"translate(-64 -96)\"/>\n</symbol><symbol id=\"album-remove\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M65,99.009C65,97.347 66.342,96 68.003,96L77.993,96C78.549,96 79,96.444 79,97C79,97.552 78.544,98 77.998,98L68.002,98C67.449,98 67,98.444 67,99C67,99.552 67.456,100 68.002,100L77.998,100C78.551,100 79,100.456 79,101.002L79,110.998C79,111.551 78.55,112 77.993,112L68.003,112C66.345,112 65,110.663 65,108.991L65,99.009ZM72,105L77,105L77,107L74,107L72,107L69,107L69,105L72,105Z\" transform=\"translate(-64 -96)\"/>\n</symbol><symbol id=\"album\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M33,99.0094776 C33,97.347389 34.3423789,96 36.0033512,96 L45.9931545,96 C46.5492199,96 47,96.4438648 47,97 L47,97 C47,97.5522847 46.544239,98 45.9975267,98 L36.0024733,98 C35.4488226,98 35,98.4438648 35,99 L35,99 C35,99.5522847 35.4509752,100 35.990778,100 L40.5089948,100 C40.7801695,100 41,100.22788 41,100.491005 L41,106 L42.5,105 L44,106 L44,100.491005 C44,100.219831 44.2157526,100 44.495389,100 L46.0010434,100 C46.5527519,100 47,100.455761 47,101.002473 L47,110.997527 C47,111.551177 46.5500512,112 45.9931545,112 L36.0033512,112 C34.3446462,112 33,110.663369 33,108.990522 L33,99.0094776 Z\" transform=\"translate(-32 -96)\"/>\n</symbol><symbol id=\"arrow-left\"><path d=\"M3.57 13l10.106 9.263a1 1 0 1 1-1.352 1.474L.327 12.74a.997.997 0 0 1 0-1.48L12.324.263a1 1 0 1 1 1.352 1.474L3.57 11H23a1 1 0 1 1 0 2H3.57z\"/></symbol><symbol id=\"arrow-right\"><path d=\"M20.43 13l-10.106 9.263a1 1 0 1 0 1.352 1.474L23.673 12.74a.997.997 0 0 0 0-1.48L11.676.263a1 1 0 0 0-1.352 1.474L20.43 11H1a1 1 0 1 0 0 2h19.43z\"/></symbol><symbol id=\"arrow\">\n  <polyline points=\"14.764,4.966 8.053,11.677 1.342,4.966\"/>\n</symbol><symbol id=\"back\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M10.70725,2.70725 C11.09825,2.31625 11.09825,1.68425 10.70725,1.29325 C10.31625,0.90225 9.68425,0.90225 9.29325,1.29325 L3.29325,7.29325 C2.90225,7.68425 2.90225,8.31625 3.29325,8.70725 L9.29325,14.70725 C9.68425,15.09825 10.31625,15.09825 10.70725,14.70725 C11.09825,14.31625 11.09825,13.68425 10.70725,13.29325 L5.41425,8.00025 L10.70725,2.70725 Z\"/>\n</symbol><symbol id=\"bottom-select\" viewBox=\"0 0 24 24\">\n  <g fill=\"#95999d\" fill-rule=\"evenodd\" transform=\"translate(12.285714, 12.000000) rotate(90.000000) translate(-12.285714, -12.000000)\">\n    <path d=\"M6.46026077,20.3174036 C5.84657974,20.9310847 5.84657974,21.9260582 6.46026077,22.5397392 C7.0739418,23.1534203 8.06891534,23.1534203 8.68259637,22.5397392 L18.1111678,13.1111678 C18.7248488,12.4974868 18.7248488,11.5025132 18.1111678,10.8888322 L8.68259637,1.46026077 C8.06891534,0.846579743 7.0739418,0.846579743 6.46026077,1.46026077 C5.84657974,2.0739418 5.84657974,3.06891534 6.46026077,3.68259637 L14.7776644,12 L6.46026077,20.3174036 Z\"/>\n  </g>\n</symbol><symbol id=\"bottom\" viewBox=\"0 0 24 24\">\n  <g fill-rule=\"evenodd\" transform=\"translate(12.285714, 12.000000) rotate(90.000000) translate(-12.285714, -12.000000)\">\n    <path d=\"M6.46026077,20.3174036 C5.84657974,20.9310847 5.84657974,21.9260582 6.46026077,22.5397392 C7.0739418,23.1534203 8.06891534,23.1534203 8.68259637,22.5397392 L18.1111678,13.1111678 C18.7248488,12.4974868 18.7248488,11.5025132 18.1111678,10.8888322 L8.68259637,1.46026077 C8.06891534,0.846579743 7.0739418,0.846579743 6.46026077,1.46026077 C5.84657974,2.0739418 5.84657974,3.06891534 6.46026077,3.68259637 L14.7776644,12 L6.46026077,20.3174036 Z\"/>\n  </g>\n</symbol><symbol id=\"calendar\"><path d=\"M13 1h3v2H0V1h3V0h2v1h6V0h2v1zM0 4h16v10.998A1 1 0 0 1 15 16H1c-.552 0-1-.456-1-1.002V4zm2 2v8h12V6H2zm6 3h5v4H8V9z\" fill-rule=\"nonzero\"/></symbol><symbol id=\"check-circleless\" viewBox=\"0 0 16 16\">\n  <g transform=\"translate(-32 -128)\">\n    <path d=\"M33.7071068,138.292893 C33.3165825,137.902369 32.6834175,137.902369 32.2928932,138.292893 C31.9023689,138.683418 31.9023689,139.316582 32.2928932,139.707107 L35.2928932,142.707107 C35.6834175,143.097631 36.3165825,143.097631 36.7071068,142.707107 L47.7071068,131.707107 C48.0976311,131.316582 48.0976311,130.683418 47.7071068,130.292893 C47.3165825,129.902369 46.6834175,129.902369 46.2928932,130.292893 L36,140.585786 L33.7071068,138.292893 Z\"/>\n  </g>\n</symbol><symbol id=\"check\" viewBox=\"0 0 20 20\">\n    <path d=\"M3 10.019l4.523 4.523 9.541-9.541\" stroke=\"currentColor\" stroke-width=\"2\" fill=\"none\"/>\n</symbol><symbol id=\"clock\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M136,48 C140.418278,48 144,44.418278 144,40 C144,35.581722 140.418278,32 136,32 C131.581722,32 128,35.581722 128,40 C128,44.418278 131.581722,48 136,48 Z M135,40 C135,40.2652165 135.105357,40.5195704 135.292893,40.7071068 L138.292893,43.7071068 C138.683418,44.0976311 139.316582,44.0976311 139.707107,43.7071068 C140.097631,43.3165825 140.097631,42.6834175 139.707107,42.2928932 L137,39.6004639 L137,36 C137,35.4477153 136.552285,35 136,35 C135.447715,35 135,35.4477153 135,36 L135,40 Z\" transform=\"translate(-128 -32)\"/>\n</symbol><symbol id=\"connector\" viewBox=\"0 0 20 27\">\n<title>collect</title>\n<desc>Created with Sketch.</desc>\n<g id=\"_xD83D__xDCE6_-components\">\n\t<g id=\"icons_x2F_apps_x2F_connector-box\" transform=\"translate(-50.000000, -46.000000)\">\n\t\t<g id=\"icons_x2F_connect-data-pastille_x2F_box\" transform=\"translate(40.000000, 40.000000)\">\n\t\t\t<g id=\"collect\" transform=\"translate(10.000000, 6.250000)\">\n\t\t\t\t<g id=\"Combined-Shape\">\n\t\t\t\t\t<path id=\"path-1_1_\" d=\"M9.7,13.2c0.1,0.1,0.2,0.1,0.3,0.1c0.1,0,0.2,0,0.3-0.1l6.2-5.8c0.1-0.1,0.1-0.2,0.1-0.3\n\t\t\t\t\t\tc0-0.1,0-0.1,0-0.2c-0.1-0.2-0.2-0.3-0.4-0.3h-3V0.4c0-0.2-0.2-0.4-0.4-0.4H7C6.8,0,6.6,0.2,6.6,0.4v6.2H3.8\n\t\t\t\t\t\tc-0.2,0-0.3,0.1-0.4,0.3c0,0.1,0,0.1,0,0.2c0,0.1,0,0.2,0.1,0.3L9.7,13.2z\"/>\n\t\t\t\t</g>\n\t\t\t\t<path id=\"Shape\" d=\"M19.7,11.5l-3.3-1.6l-1.8,1.7l2.9,1.4L10,16.7l-7.5-3.7l2.9-1.4L3.6,9.8l-3.3,1.6C0.1,11.6,0,11.8,0,12v9.3\n\t\t\t\t\tc0,0.2,0.1,0.5,0.3,0.6l9.4,4.7c0.1,0,0.2,0.1,0.3,0.1c0.1,0,0.2,0,0.3-0.1l9.4-4.7c0.2-0.1,0.3-0.3,0.3-0.6V12\n\t\t\t\t\tC20,11.8,19.9,11.6,19.7,11.5z\"/>\n\t\t\t</g>\n\t\t</g>\n\t</g>\n</g>\n</symbol><symbol id=\"cozy-negative\" viewBox=\"0 0 16 16\">\n    \n    <g id=\"16px\" stroke=\"none\" stroke-width=\"1\" fill-rule=\"evenodd\" transform=\"translate(-160.000000, -255.000000)\">\n        <g id=\"slices\" transform=\"translate(32.000000, 32.000000)\"/>\n        <mask id=\"mask-2\" fill=\"white\">\n            <use xlink:href=\"#path-1\"/>\n        </mask>\n        <use id=\"Mask\" xlink:href=\"#path-1\"/>\n    </g>\n</symbol><symbol id=\"cozy\" viewBox=\"0 0 52 52\">\n  <path fill=\"#297EF2\" fill-rule=\"evenodd\" d=\"M558.23098,44 L533.76902,44 C526.175046,44 520,37.756072 520,30.0806092 C520,26.4203755 521.393962,22.9628463 523.927021,20.3465932 C526.145918,18.0569779 529.020185,16.6317448 532.129554,16.2609951 C532.496769,13.1175003 533.905295,10.2113693 536.172045,7.96901668 C538.760238,5.40737823 542.179607,4 545.800788,4 C549.420929,4 552.841339,5.40737823 555.429532,7.96796639 C557.686919,10.2008665 559.091284,13.0912433 559.467862,16.2179336 C566.482405,16.8533543 572,22.8284102 572,30.0816594 C572,37.756072 565.820793,44 558.22994,44 L558.23098,44 Z M558.068077,40.9989547 L558.171599,40.9989547 C564.142748,40.9989547 569,36.0883546 569,30.0520167 C569,24.0167241 564.142748,19.1061239 558.171599,19.1061239 L558.062901,19.1061239 C557.28338,19.1061239 556.644649,18.478972 556.627051,17.6887604 C556.492472,11.7935317 551.63729,7 545.802791,7 C539.968291,7 535.111039,11.7956222 534.977495,17.690851 C534.959896,18.4664289 534.34187,19.0914904 533.573737,19.1092597 C527.743378,19.2451426 523,24.1536522 523,30.0530619 C523,36.0893999 527.857252,41 533.828401,41 L533.916395,41 L533.950557,40.9979094 C533.981614,40.9979094 534.01267,40.9979094 534.043727,41 L558.064971,41 L558.068077,40.9989547 Z M553.766421,29.2227318 C552.890676,28.6381003 552.847676,27.5643091 552.845578,27.5171094 C552.839285,27.2253301 552.606453,26.9957683 552.32118,27.0000592 C552.035908,27.0054228 551.809368,27.2467844 551.814612,27.5364185 C551.81671,27.5750363 551.831393,28.0792139 552.066323,28.6735 C548.949302,31.6942753 544.051427,31.698566 540.928113,28.6917363 C541.169336,28.0888684 541.185068,27.576109 541.185068,27.5374911 C541.190312,27.2478572 540.964821,27.0086409 540.681646,27.0011319 C540.401618,26.9925502 540.163541,27.2264027 540.154102,27.5160368 C540.154102,27.5589455 540.11215,28.6370275 539.234308,29.2216592 C538.995183,29.3825669 538.92806,29.7097461 539.08433,29.9532532 C539.182917,30.1077246 539.346529,30.1924694 539.516434,30.1924694 C539.612923,30.1924694 539.710461,30.1645787 539.797512,30.1066519 C540.023003,29.9564713 540.211786,29.7848363 540.370154,29.6024742 C542.104862,31.2008247 544.296845,32 546.488828,32 C548.686055,32 550.883282,31.1976066 552.621136,29.5917471 C552.780553,29.7762546 552.971434,29.9521804 553.203218,30.1066519 C553.289219,30.1645787 553.387806,30.1924694 553.484295,30.1924694 C553.652102,30.1924694 553.816763,30.1066519 553.916399,29.9521804 C554.07162,29.7076006 554.004497,29.3793488 553.766421,29.2205864 L553.766421,29.2227318 Z\" transform=\"translate(-520)\"/>\n</symbol><symbol id=\"cross\" viewBox=\"0 0 24 24\">\n  <path fill-rule=\"evenodd\" d=\"M106.585786,44 L96.2928932,33.7071068 C95.9023689,33.3165825 95.9023689,32.6834175 96.2928932,32.2928932 C96.6834175,31.9023689 97.3165825,31.9023689 97.7071068,32.2928932 L108,42.5857864 L118.292893,32.2928932 C118.683418,31.9023689 119.316582,31.9023689 119.707107,32.2928932 C120.097631,32.6834175 120.097631,33.3165825 119.707107,33.7071068 L109.414214,44 L119.707107,54.2928932 C120.097631,54.6834175 120.097631,55.3165825 119.707107,55.7071068 C119.316582,56.0976311 118.683418,56.0976311 118.292893,55.7071068 L108,45.4142136 L97.7071068,55.7071068 C97.3165825,56.0976311 96.6834175,56.0976311 96.2928932,55.7071068 C95.9023689,55.3165825 95.9023689,54.6834175 96.2928932,54.2928932 L106.585786,44 Z\" transform=\"translate(-96 -32)\"/>\n</symbol><symbol id=\"cross-small\" viewBox=\"0 0 12 12\">\n  <path d=\"M6 4.59l2.3-2.3a1 1 0 0 1 1.4 1.42L7.42 6l2.3 2.3A1 1 0 1 1 8.3 9.7L6 7.42l-2.3 2.3A1 1 0 1 1 2.3 8.3L4.58 6l-2.3-2.3A1 1 0 0 1 3.7 2.3L6 4.58z\"/>\n</symbol><symbol id=\"cube\" viewBox=\"0 0 16 16\">\n  <path d=\"M1,11.0086308 L1,5.50051502 C1,4.95127159 1.3905874,4.72776572 1.87240137,5.00308799 L7.12759863,8.00605786 C7.60359323,8.27805477 8,8.95047139 8,9.50051502 L8,15.0086308 C8,15.5578743 7.6094126,15.7813801 7.12759863,15.5060579 L1.87240137,12.503088 C1.39640677,12.2310911 1,11.5586745 1,11.0086308 Z M16,11.0086308 C16,11.5586745 15.6035932,12.2310911 15.1275986,12.503088 L9.87240137,15.5060579 C9.3905874,15.7813801 9,15.5578743 9,15.0086308 L9,9.50051502 C9,8.95047139 9.39640677,8.27805477 9.87240137,8.00605786 L15.1275986,5.00308799 C15.6094126,4.72776572 16,4.95127159 16,5.50051502 L16,11.0086308 Z M9.34976149,6.98164278 C8.88045118,7.27044912 8.11286116,7.26633364 7.65023851,6.98164278 L2.84976149,4.02750307 C2.38045118,3.73869673 2.38713884,3.29611355 2.87661892,3.03254735 L7.62338108,0.476598498 C8.10752434,0.215905973 8.88713884,0.213032303 9.37661892,0.476598498 L14.1233811,3.03254735 C14.6075243,3.29323988 14.6128612,3.74281221 14.1502385,4.02750307 L9.34976149,6.98164278 Z\" id=\"path-1\"/>\n</symbol><symbol id=\"dash\" viewBox=\"0 0 20 20\"><path d=\"M3.497 10h13.006\" stroke=\"currentColor\" stroke-width=\"2\"/></symbol><symbol id=\"delete\" viewBox=\"0 0 16 16\">\n  <g fill-rule=\"evenodd\" transform=\"translate(-96 -32)\">\n    <path d=\"M100.5,33 L98.0068455,33 C97.4499488,33 97,33.4477153 97,34 L97,35 L111,35 L111,34 C111,33.4438648 110.54922,33 109.993155,33 L107.5,33 L107,32 L101,32 L100.5,33 Z M98,36 L110,36 L110,45.9914698 C110,47.1007504 109.09805,48 107.99147,48 L100.00853,48 C98.8992496,48 98,47.0980496 98,45.9914698 L98,36 Z\"/>\n    <path d=\"M100.5,33 L98.0068455,33 C97.4499488,33 97,33.4477153 97,34 L97,35 L111,35 L111,34 C111,33.4438648 110.54922,33 109.993155,33 L107.5,33 L107,32 L101,32 L100.5,33 Z M98,36 L110,36 L110,45.9914698 C110,47.1007504 109.09805,48 107.99147,48 L100.00853,48 C98.8992496,48 98,47.0980496 98,45.9914698 L98,36 Z\"/>\n  </g>\n</symbol><symbol id=\"destroy\" viewBox=\"0 0 16 16\">\n  <g fill-rule=\"evenodd\" transform=\"translate(-96 -32)\">\n    <path d=\"M100.5,33 L98.0068455,33 C97.4499488,33 97,33.4477153 97,34 L97,35 L111,35 L111,34 C111,33.4438648 110.54922,33 109.993155,33 L107.5,33 L107,32 L101,32 L100.5,33 Z M98,36 L110,36 L110,45.9914698 C110,47.1007504 109.09805,48 107.99147,48 L100.00853,48 C98.8992496,48 98,47.0980496 98,45.9914698 L98,36 Z\"/>\n    <path d=\"M100.5,33 L98.0068455,33 C97.4499488,33 97,33.4477153 97,34 L97,35 L111,35 L111,34 C111,33.4438648 110.54922,33 109.993155,33 L107.5,33 L107,32 L101,32 L100.5,33 Z M98,36 L110,36 L110,45.9914698 C110,47.1007504 109.09805,48 107.99147,48 L100.00853,48 C98.8992496,48 98,47.0980496 98,45.9914698 L98,36 Z\"/>\n  </g>\n</symbol><symbol id=\"display\" viewBox=\"0 0 16 16\">\n    \n    <g id=\"icons/16/icon-display\" stroke=\"none\" stroke-width=\"1\" fill=\"none\" fill-rule=\"evenodd\">\n        <mask id=\"mask-2\" fill=\"white\">\n            <use xlink:href=\"#path-1\"/>\n        </mask>\n        <use id=\"Fill-1\" xlink:href=\"#path-1\"/>\n    </g>\n</symbol><symbol id=\"dots\" viewBox=\"0 0 16 16\">\n  <path fill=\"#32363f\" fill-rule=\"evenodd\" d=\"M34,74 C35.1045695,74 36,73.1045695 36,72 C36,70.8954305 35.1045695,70 34,70 C32.8954305,70 32,70.8954305 32,72 C32,73.1045695 32.8954305,74 34,74 Z M46,74 C47.1045695,74 48,73.1045695 48,72 C48,70.8954305 47.1045695,70 46,70 C44.8954305,70 44,70.8954305 44,72 C44,73.1045695 44.8954305,74 46,74 Z M40,74 C41.1045695,74 42,73.1045695 42,72 C42,70.8954305 41.1045695,70 40,70 C38.8954305,70 38,70.8954305 38,72 C38,73.1045695 38.8954305,74 40,74 Z\" transform=\"translate(-32 -64)\"/>\n</symbol><symbol id=\"download\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M231,103.414214 L229.707107,104.707107 C229.316582,105.097631 228.683418,105.097631 228.292893,104.707107 C227.902369,104.316582 227.902369,103.683418 228.292893,103.292893 L231.292893,100.292893 C231.683418,99.9023689 232.316582,99.9023689 232.707107,100.292893 L235.707107,103.292893 C236.097631,103.683418 236.097631,104.316582 235.707107,104.707107 C235.316582,105.097631 234.683418,105.097631 234.292893,104.707107 L233,103.414214 L233,111 C233,111.552285 232.552285,112 232,112 C231.447715,112 231,111.552285 231,111 L231,103.414214 Z M225,99 L239,99 C239.552285,99 240,98.5522847 240,98 C240,97.4477153 239.552285,97 239,97 L225,97 C224.447715,97 224,97.4477153 224,98 C224,98.5522847 224.447715,99 225,99 Z\" transform=\"matrix(1 0 0 -1 -224 113)\"/>\n</symbol><symbol id=\"exchange\" viewBox=\"0 0 20 20\">\n<g id=\"Mask\">\n\t<path id=\"path-1_1_\" d=\"M4.3,12.5h9.5c0.7,0,1.2,0.6,1.2,1.2S14.4,15,13.8,15H4.3l1.6,1.6c0.5,0.5,0.5,1.3,0,1.8\n\t\tc-0.5,0.5-1.3,0.5-1.8,0l-3.8-3.8c-0.5-0.5-0.5-1.3,0-1.8l3.8-3.8c0.5-0.5,1.3-0.5,1.8,0s0.5,1.3,0,1.8L4.3,12.5z M15.7,7.5H6.2\n\t\tC5.6,7.5,5,6.9,5,6.2S5.6,5,6.2,5h9.5l-1.6-1.6c-0.5-0.5-0.5-1.3,0-1.8s1.3-0.5,1.8,0l3.8,3.8c0.5,0.5,0.5,1.3,0,1.8l-3.8,3.8\n\t\tc-0.5,0.5-1.3,0.5-1.8,0s-0.5-1.3,0-1.8L15.7,7.5z\"/>\n</g>\n</symbol><symbol id=\"eye\" viewBox=\"0 0 20 20\">\n  <path fill-rule=\"evenodd\" d=\"M21,10 C21,10 24,4 30,4 C36,4 39,10 39,10 C39,10 36,16 30,16 C24,16 21,10 21,10 Z M30,14 C32.2091391,14 34,12.2091391 34,10 C34,7.79086089 32.2091391,6 30,6 C27.7908609,6 26,7.79086089 26,10 C26,12.2091391 27.7908609,14 30,14 Z M30,12 C31.1045696,12 32,11.1045696 32,10 C32,8.89543045 31.1045696,8 30,8 C28.8954304,8 28,8.89543045 28,10 C28,11.1045696 28.8954304,12 30,12 Z\" transform=\"translate(-20)\"/>\n</symbol><symbol id=\"eye-closed\" viewBox=\"0 0 20 20\">\n  <g fill-rule=\"evenodd\" transform=\"translate(1 4)\">\n    <path d=\"M0,6 C0,6 3,-4.8985872e-16 9,0 C15,4.89858741e-16 18,6 18,6 C18,6 15,12 9,12 C3,12 0,6 0,6 Z M9,10 C11.2091391,10 13,8.20913911 13,6 C13,3.79086089 11.2091391,2 9,2 C6.79086089,2 5,3.79086089 5,6 C5,8.20913911 6.79086089,10 9,10 Z M9,8 C10.1045696,8 11,7.10456955 11,6 C11,4.89543045 10.1045696,4 9,4 C7.89543045,4 7,4.89543045 7,6 C7,7.10456955 7.89543045,8 9,8 Z\"/>\n    <path stroke=\"#FFFFFF\" stroke-width=\"4\" d=\"M2,13 L16,0\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>\n    <path transform=\"translate(-1 -4)\" d=\"M16.32,3.267c0.966,-0.832 2.311,0.514 1.36,1.466l-14,13c-0.992,0.854 -2.31,-0.516 -1.36,-1.466l14,-13Z\" style=\"fill-rule:nonzero;\"/>\n  </g>\n</symbol><symbol id=\"file-none\" viewBox=\"0 0 16 16\">\n  \n  <g fill-rule=\"evenodd\">\n    <use xlink:href=\"#file-none-a\"/>\n  </g>\n</symbol><symbol id=\"file\" viewBox=\"0 0 16 16\">\n  \n  <g fill-rule=\"evenodd\">\n    <use xlink:href=\"#file-a\"/>\n  </g>\n</symbol><symbol id=\"folder\" viewBox=\"0 0 16 16\">\n  <g fill-rule=\"evenodd\" transform=\"translate(-32 -32)\">\n    <path d=\"M32,34.0068455 C32,33.4507801 32.4509752,33 32.990778,33 L37.5089948,33 C37.7801695,33 38.1569366,33.1569366 38.3483734,33.3483734 L39.6516266,34.6516266 C39.8440279,34.8440279 40.2307968,35 40.5004358,35 L47.0029699,35 C47.5536144,35 48,35.455761 48,36.0024733 L48,44.9914698 C48,46.1007504 47.1054862,47 46.0059397,47 L33.9940603,47 C32.8927712,47 32,46.1029399 32,44.9941413 L32,34.0068455 Z M32,37 L48,37 L48,38 L32,38 L32,37 Z\"/>\n    <path d=\"M32,34.0068455 C32,33.4507801 32.4509752,33 32.990778,33 L37.5089948,33 C37.7801695,33 38.1569366,33.1569366 38.3483734,33.3483734 L39.6516266,34.6516266 C39.8440279,34.8440279 40.2307968,35 40.5004358,35 L47.0029699,35 C47.5536144,35 48,35.455761 48,36.0024733 L48,44.9914698 C48,46.1007504 47.1054862,47 46.0059397,47 L33.9940603,47 C32.8927712,47 32,46.1029399 32,44.9941413 L32,34.0068455 Z M32,37 L48,37 L48,38 L32,38 L32,37 Z\"/>\n  </g>\n</symbol><symbol id=\"forward\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M12.707,7.2929 L6.707,1.2929 C6.316,0.9019 5.684,0.9019 5.293,1.2929 C4.902,1.6839 4.902,2.3159 5.293,2.7069 L10.586,7.9999 L5.293,13.2929 C4.902,13.6839 4.902,14.3159 5.293,14.7069 C5.684,15.0979 6.316,15.0979 6.707,14.7069 L12.707,8.7069 C13.098,8.3159 13.098,7.6839 12.707,7.2929\"/>\n</symbol><symbol id=\"gear\" viewBox=\"0 0 16 16\">\n  <g fill-rule=\"evenodd\" transform=\"translate(-224 -32)\">\n    <path d=\"M238.249356,39.0782973 C238.301407,39.3371436 238.327432,39.6459602 238.327432,40.0037478 C238.327432,40.3615353 238.301407,40.6693526 238.249356,40.9291983 L239.869946,42.2624067 C240.000074,42.3483557 240.032105,42.4652862 239.968042,42.6141978 C239.642723,43.5646335 239.109199,44.4401137 238.36647,45.2416378 C238.262368,45.3655642 238.137246,45.3965458 237.995106,45.335582 L235.964113,44.6679784 C235.443602,45.0637434 234.884053,45.37256 234.284464,45.5944283 L233.875062,47.5932415 C233.849037,47.7401543 233.757948,47.8271027 233.601794,47.8520878 C233.041244,47.9520285 232.507721,48 232.000222,48 C231.492724,48 230.9582,47.9510291 230.398651,47.8520878 C230.242497,47.8281021 230.151408,47.7411537 230.125382,47.5932415 L229.715981,45.5944283 C229.077354,45.3605672 228.517805,45.0507511 228.036332,44.6679784 L226.005339,45.335582 C225.861197,45.3975452 225.738077,45.3655642 225.633974,45.2416378 C224.892246,44.4401137 224.358723,43.5646335 224.032403,42.6141978 C223.967339,42.4662856 224.000371,42.3483557 224.130499,42.2624067 L225.751089,40.9291983 C225.699038,40.6693526 225.673013,40.3625347 225.673013,40.0037478 C225.673013,39.6459602 225.699038,39.3371436 225.751089,39.0782973 L224.130499,37.7460883 C224.000371,37.6601393 223.967339,37.5422093 224.032403,37.3942971 C224.357722,36.4448609 224.891245,35.5683813 225.633974,34.7668572 C225.738077,34.6439302 225.862198,34.6129486 226.005339,34.6739124 L228.036332,35.3405166 C228.516804,34.9577438 229.077354,34.6499266 229.715981,34.4150661 L230.125382,32.4162528 C230.151408,32.2683407 230.242497,32.1823917 230.398651,32.1574065 C231.465698,31.9475312 232.533746,31.9475312 233.600793,32.1574065 C233.756947,32.1813923 233.848036,32.2683407 233.874061,32.4162528 L234.283463,34.4150661 C234.883052,34.6379337 235.442601,34.945751 235.963112,35.3405166 L237.994105,34.6739124 C238.137246,34.6119492 238.261367,34.6439302 238.36547,34.7668572 C239.107197,35.5693807 239.640721,36.4448609 239.967041,37.3942971 C240.031104,37.5422093 239.999073,37.6601393 239.868945,37.7460883 L238.249356,39.0782973 L238.249356,39.0782973 Z M232,36.5 C230.067125,36.5 228.5,38.067125 228.5,40 C228.5,41.932875 230.067125,43.5 232,43.5 C233.932875,43.5 235.5,41.932875 235.5,40 C235.5,38.067125 233.932875,36.5 232,36.5 L232,36.5 Z\"/>\n    <path d=\"M238.249356,39.0782973 C238.301407,39.3371436 238.327432,39.6459602 238.327432,40.0037478 C238.327432,40.3615353 238.301407,40.6693526 238.249356,40.9291983 L239.869946,42.2624067 C240.000074,42.3483557 240.032105,42.4652862 239.968042,42.6141978 C239.642723,43.5646335 239.109199,44.4401137 238.36647,45.2416378 C238.262368,45.3655642 238.137246,45.3965458 237.995106,45.335582 L235.964113,44.6679784 C235.443602,45.0637434 234.884053,45.37256 234.284464,45.5944283 L233.875062,47.5932415 C233.849037,47.7401543 233.757948,47.8271027 233.601794,47.8520878 C233.041244,47.9520285 232.507721,48 232.000222,48 C231.492724,48 230.9582,47.9510291 230.398651,47.8520878 C230.242497,47.8281021 230.151408,47.7411537 230.125382,47.5932415 L229.715981,45.5944283 C229.077354,45.3605672 228.517805,45.0507511 228.036332,44.6679784 L226.005339,45.335582 C225.861197,45.3975452 225.738077,45.3655642 225.633974,45.2416378 C224.892246,44.4401137 224.358723,43.5646335 224.032403,42.6141978 C223.967339,42.4662856 224.000371,42.3483557 224.130499,42.2624067 L225.751089,40.9291983 C225.699038,40.6693526 225.673013,40.3625347 225.673013,40.0037478 C225.673013,39.6459602 225.699038,39.3371436 225.751089,39.0782973 L224.130499,37.7460883 C224.000371,37.6601393 223.967339,37.5422093 224.032403,37.3942971 C224.357722,36.4448609 224.891245,35.5683813 225.633974,34.7668572 C225.738077,34.6439302 225.862198,34.6129486 226.005339,34.6739124 L228.036332,35.3405166 C228.516804,34.9577438 229.077354,34.6499266 229.715981,34.4150661 L230.125382,32.4162528 C230.151408,32.2683407 230.242497,32.1823917 230.398651,32.1574065 C231.465698,31.9475312 232.533746,31.9475312 233.600793,32.1574065 C233.756947,32.1813923 233.848036,32.2683407 233.874061,32.4162528 L234.283463,34.4150661 C234.883052,34.6379337 235.442601,34.945751 235.963112,35.3405166 L237.994105,34.6739124 C238.137246,34.6119492 238.261367,34.6439302 238.36547,34.7668572 C239.107197,35.5693807 239.640721,36.4448609 239.967041,37.3942971 C240.031104,37.5422093 239.999073,37.6601393 239.868945,37.7460883 L238.249356,39.0782973 L238.249356,39.0782973 Z M232,36.5 C230.067125,36.5 228.5,38.067125 228.5,40 C228.5,41.932875 230.067125,43.5 232,43.5 C233.932875,43.5 235.5,41.932875 235.5,40 C235.5,38.067125 233.932875,36.5 232,36.5 L232,36.5 Z\"/>\n  </g>\n</symbol><symbol id=\"help\"><use xlink:href=\"#a\" fill-rule=\"evenodd\"/></symbol><symbol id=\"hide\" viewBox=\"0 0 16 16\">\n    \n    <g id=\"icons/16/icon-hide\" stroke=\"none\" stroke-width=\"1\" fill=\"none\" fill-rule=\"evenodd\">\n        <mask id=\"mask-2\" fill=\"white\">\n            <use xlink:href=\"#path-1\"/>\n        </mask>\n        <use id=\"Fill-1\" xlink:href=\"#path-1\"/>\n    </g>\n</symbol><symbol id=\"hourglass\" viewBox=\"0 0 16 16\">\n  \n  <g fill-rule=\"evenodd\">\n    <use xlink:href=\"#hourglass-a\"/>\n  </g>\n</symbol><symbol id=\"info\" viewBox=\"0 0 16 16\"><use fill-rule=\"evenodd\" xlink:href=\"#info\"/></symbol><symbol id=\"image\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M65.0008717,65 C64.4481055,65 64,65.4499488 64,66.0068455 L64,77.9931545 C64,78.5492199 64.4446309,79 65.0008717,79 L78.9991283,79 C79.5518945,79 80,78.5500512 80,77.9931545 L80,66.0068455 C80,65.4507801 79.5553691,65 78.9991283,65 L65.0008717,65 Z M69,72 L71,74 L75,70 L78,73 L78,75.9906311 C78,76.5480902 77.544239,77 76.9975267,77 L67.0024733,77 C66.4488226,77 66,76.5561352 66,76 L66,75 L69,72 Z M69.5,70 C70.3284272,70 71,69.3284272 71,68.5 C71,67.6715728 70.3284272,67 69.5,67 C68.6715728,67 68,67.6715728 68,68.5 C68,69.3284272 68.6715728,70 69.5,70 Z\" transform=\"translate(-64 -64)\"/>\n</symbol><symbol id=\"lock\" viewBox=\"0 0 16 16\">\n  <g stroke=\"none\" stroke-width=\"1\" fill-rule=\"evenodd\">\n      <path d=\"M2,15.0046024 C2,15.5543453 2.45576096,16 3.00247329,16 L12.9975267,16 C13.5511774,16 14,15.5443356 14,15.0046024 L14,6.99539757 C14,6.44565467 13.5561352,6 13,6 L12,6 L12,4 C12,1.794 10.2053333,0 8,0 C5.794,0 4,1.794 4,4 L4,6 L3,6 C2.44771525,6 2,6.4556644 2,6.99539757 L2,15.0046024 Z M6,4.5 C6,3.1215 6.8968,2 8,2 C9.1028,2 10,3.1215 10,4.5 L10,6 L6,6 L6,4.5 Z M8,8.5 C8.8265,8.5 9.5,9.172 9.5,10 C9.5,10.552 9.1955,11.032 8.75,11.29 L8.75,13.75 C8.75,14.1625 8.4125,14.5 8,14.5 C7.586,14.5 7.25,14.1625 7.25,13.75 L7.25,11.29 C6.803,11.032 6.5,10.552 6.5,10 C6.5,9.172 7.172,8.5 8,8.5 Z\"/>\n  </g>\n</symbol><symbol id=\"moveto\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M295.5,102.914214 L294.207107,104.207107 C293.816582,104.597631 293.183418,104.597631 292.792893,104.207107 C292.402369,103.816582 292.402369,103.183418 292.792893,102.792893 L295.792893,99.7928932 C296.183418,99.4023689 296.816582,99.4023689 297.207107,99.7928932 L300.207107,102.792893 C300.597631,103.183418 300.597631,103.816582 300.207107,104.207107 C299.816582,104.597631 299.183418,104.597631 298.792893,104.207107 L297.5,102.914214 L297.5,110.5 C297.5,111.052285 297.052285,111.5 296.5,111.5 C295.947715,111.5 295.5,111.052285 295.5,110.5 L295.5,102.914214 Z M289.5,98.5 L303.5,98.5 C304.052285,98.5 304.5,98.0522847 304.5,97.5 C304.5,96.9477153 304.052285,96.5 303.5,96.5 L289.5,96.5 C288.947715,96.5 288.5,96.9477153 288.5,97.5 C288.5,98.0522847 288.947715,98.5 289.5,98.5 Z\" transform=\"rotate(90 200.5 -88)\"/>\n</symbol><symbol id=\"next\" viewBox=\"0 0 16 16\">\n    <g stroke-width=\"1\" fill-rule=\"evenodd\">\n        <path d=\"M3.41421356,7 L14.9931545,7 C15.5492199,7 16,7.44386482 16,8 C16,8.55228475 15.5500512,9 14.9931545,9 L3.41421356,9 L8.70710678,14.2928932 C9.09763107,14.6834175 9.09763107,15.3165825 8.70710678,15.7071068 C8.31658249,16.0976311 7.68341751,16.0976311 7.29289322,15.7071068 L0.292893219,8.70710678 C-0.0976310729,8.31658249 -0.0976310729,7.68341751 0.292893219,7.29289322 L7.29289322,0.292893219 C7.68341751,-0.0976310729 8.31658249,-0.0976310729 8.70710678,0.292893219 C9.09763107,0.683417511 9.09763107,1.31658249 8.70710678,1.70710678 L3.41421356,7 Z\" transform=\"translate(8.000000, 8.000000) scale(-1, 1) translate(-8.000000, -8.000000) \"/>\n    </g>\n</symbol><symbol id=\"openwith\" viewBox=\"0 0 16 16\">\n  <g fill-rule=\"evenodd\" transform=\"translate(-128 -160)\">\n    <path d=\"M137,160 L137,162 L140.5,162 L134,168.5 L135.5,170 L142,163.5 L142,167 L144,167 L144,161.002929 C144,160.449027 143.562119,160 142.997071,160 L137,160 Z M135,162 L135,160 L129.002929,160 C128.449027,160 128,160.444631 128,161.000872 L128,174.999128 C128,175.551894 128.444631,176 129.000872,176 L142.999128,176 C143.551894,176 144,175.562119 144,174.997071 L144,169 L142,169 L142,174 L130,174 L130,162 L135,162 Z\"/>\n  </g>\n</symbol><symbol id=\"paperplane\" viewBox=\"0 0 16 16\">\n  <g fill-rule=\"evenodd\" transform=\"translate(-256 -64)\">\n    <polygon points=\"272 64 266 79 263.5 76.5 260 79 259 75 269 66.5 259 72.5 256 70\"/>\n  </g>\n</symbol><symbol id=\"pen\" viewBox=\"0 0 16 16\">\n  \n  <use fill-rule=\"evenodd\" xlink:href=\"#pen\"/>\n</symbol><symbol id=\"people\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M136,73 C138.209139,73 140,70.9852814 140,68.5 C140,66.0147186 138.209139,64 136,64 C133.790861,64 132,66.0147186 132,68.5 C132,70.9852814 133.790861,73 136,73 Z M128,78 C128,77 130,74 132,74 C134,74 133,75 136,75 C139,75 138,74 140,74 C142,74 144,77 144,78 C144,79 144,80 143,80 L129,80 C128,80 128,79 128,78 Z\" transform=\"translate(-128 -64)\"/>\n</symbol><symbol id=\"phone-download\" viewBox=\"0 0 16 16\">\n  <g transform=\"translate(-64 -160)\">\n    <path d=\"M71,168.585786 L71,164 C71,163.447715 71.4477153,163 72,163 C72.5522847,163 73,163.447715 73,164 L73,168.585786 L73.2928932,168.292893 C73.6834175,167.902369 74.3165825,167.902369 74.7071068,168.292893 C75.0976311,168.683418 75.0976311,169.316582 74.7071068,169.707107 L72.7071068,171.707107 C72.3165825,172.097631 71.6834175,172.097631 71.2928932,171.707107 L69.2928932,169.707107 C68.9023689,169.316582 68.9023689,168.683418 69.2928932,168.292893 C69.6834175,167.902369 70.3165825,167.902369 70.7071068,168.292893 L71,168.585786 Z M66,161.000872 C66,160.448106 66.455761,160 67.0024733,160 L76.9975267,160 C77.5511774,160 78,160.444631 78,161.000872 L78,174.999128 C78,175.551894 77.544239,176 76.9975267,176 L67.0024733,176 C66.4488226,176 66,175.555369 66,174.999128 L66,161.000872 Z M68,162 L68,173 L76,173 L76,162 L68,162 Z\"/>\n  </g>\n</symbol><symbol id=\"plus\" viewBox=\"0 0 16 16\">\n  \n  <g fill-rule=\"evenodd\">\n    <use xlink:href=\"#plus-a\"/>\n  </g>\n</symbol><symbol id=\"plus-small\" viewBox=\"0 0 12 12\">\n    \n    <use fill-rule=\"evenodd\" transform=\"translate(1 1)\" xlink:href=\"#plus-small\"/>\n</symbol><symbol id=\"previous\" viewBox=\"0 0 16 16\">\n    <g stroke-width=\"1\" fill-rule=\"evenodd\">\n        <path d=\"M3.41421356,7 L14.9931545,7 C15.5492199,7 16,7.44386482 16,8 C16,8.55228475 15.5500512,9 14.9931545,9 L3.41421356,9 L8.70710678,14.2928932 C9.09763107,14.6834175 9.09763107,15.3165825 8.70710678,15.7071068 C8.31658249,16.0976311 7.68341751,16.0976311 7.29289322,15.7071068 L0.292893219,8.70710678 C-0.0976310729,8.31658249 -0.0976310729,7.68341751 0.292893219,7.29289322 L7.29289322,0.292893219 C7.68341751,-0.0976310729 8.31658249,-0.0976310729 8.70710678,0.292893219 C9.09763107,0.683417511 9.09763107,1.31658249 8.70710678,1.70710678 L3.41421356,7 Z\"/>\n    </g>\n</symbol><symbol id=\"rename\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M201.5,99.5 L192,109.025391 L192,112 L195.03772,112 L204.5,102.5 L201.5,99.5 Z M206.912154,96.9121541 C206.132243,96.1322429 204.869144,96.1308556 204.089264,96.9107361 L203,98 L206.030762,101 L207.092271,99.9252663 C207.869738,99.1381134 207.863777,97.8637772 207.087846,97.0878459 L206.912154,96.9121541 Z M199,110 L204.997071,110 C205.550973,110 206,110.443865 206,111 C206,111.552285 205.553689,112 205.002455,112 L197,112 L199,110 Z\" transform=\"translate(-192 -96)\"/>\n</symbol><symbol id=\"restore\" viewBox=\"0 0 16 16\">\n  <g fill-rule=\"evenodd\" transform=\"translate(1 2)\">\n    <path d=\"M-1.33226763e-14,13 L6.02479339,13 L8,13 C12.0522847,13 15,10.0522847 15,6 C15,1.94771525 12.0522847,-1 8,-1 C3.94771525,-1 1,1.94771525 1,6 C1,6.55228475 1.44771525,7 2,7 C2.55228475,7 3,6.55228475 3,6 C3,3.05228475 5.05228475,1 8,1 C10.9477153,1 13,3.05228475 13,6 C13,8.94771525 10.9477153,11 8,11 L-1.57651669e-14,11 C-0.55228475,11 -1,11.4477153 -1,12 C-1,12.5522847 -0.55228475,13 -1.33226763e-14,13 Z\"/>\n    <path d=\"M0.832050294,2.4452998 C0.525697835,1.98577112 -0.0951715076,1.86159725 -0.554700196,2.16794971 C-1.01422888,2.47430216 -1.13840275,3.09517151 -0.832050294,3.5547002 L1.16794971,6.5547002 C1.47430216,7.01422888 2.09517151,7.13840275 2.5547002,6.83205029 L5.5547002,4.83205029 C6.01422888,4.52569784 6.13840275,3.90482849 5.83205029,3.4452998 C5.52569784,2.98577112 4.90482849,2.86159725 4.4452998,3.16794971 L2.2773501,4.61324951 L0.832050294,2.4452998 Z\"/>\n  </g>\n</symbol><symbol id=\"share\" viewBox=\"0 0 16 16\">\n  <g fill-rule=\"evenodd\" transform=\"translate(-160 -32)\">\n    <path d=\"M165.082611,42.1593397 C164.543049,42.6798471 163.808912,43 163,43 C161.343146,43 160,41.6568542 160,40 C160,38.3431458 161.343146,37 163,37 C163.808912,37 164.543049,37.3201529 165.082611,37.8406603 L170.022669,35.3706317 C170.007705,35.2491857 170,35.1254927 170,35 C170,33.3431458 171.343146,32 173,32 C174.656854,32 176,33.3431458 176,35 C176,36.6568542 174.656854,38 173,38 C172.191088,38 171.456951,37.6798471 170.917389,37.1593397 L165.977331,39.6293683 C165.992295,39.7508143 166,39.8745073 166,40 C166,40.1254927 165.992295,40.2491857 165.977331,40.3706317 L170.917389,42.8406603 C171.456951,42.3201529 172.191088,42 173,42 C174.656854,42 176,43.3431458 176,45 C176,46.6568542 174.656854,48 173,48 C171.343146,48 170,46.6568542 170,45 C170,44.8745073 170.007705,44.7508143 170.022669,44.6293683 L165.082611,42.1593397 Z\"/>\n    <path d=\"M165.082611,42.1593397 C164.543049,42.6798471 163.808912,43 163,43 C161.343146,43 160,41.6568542 160,40 C160,38.3431458 161.343146,37 163,37 C163.808912,37 164.543049,37.3201529 165.082611,37.8406603 L170.022669,35.3706317 C170.007705,35.2491857 170,35.1254927 170,35 C170,33.3431458 171.343146,32 173,32 C174.656854,32 176,33.3431458 176,35 C176,36.6568542 174.656854,38 173,38 C172.191088,38 171.456951,37.6798471 170.917389,37.1593397 L165.977331,39.6293683 C165.992295,39.7508143 166,39.8745073 166,40 C166,40.1254927 165.992295,40.2491857 165.977331,40.3706317 L170.917389,42.8406603 C171.456951,42.3201529 172.191088,42 173,42 C174.656854,42 176,43.3431458 176,45 C176,46.6568542 174.656854,48 173,48 C171.343146,48 170,46.6568542 170,45 C170,44.8745073 170.007705,44.7508143 170.022669,44.6293683 L165.082611,42.1593397 Z\"/>\n  </g>\n</symbol><symbol id=\"small-arrow\" viewBox=\"0 0 12 12\">\n    <path d=\"M1.70710678,3.29289322 C1.31658249,2.90236893 0.683417511,2.90236893 0.292893219,3.29289322 C-0.0976310729,3.68341751 -0.0976310729,4.31658249 0.292893219,4.70710678 L5.29289322,9.70710678 C5.68341751,10.0976311 6.31658249,10.0976311 6.70710678,9.70710678 L11.7071068,4.70710678 C12.0976311,4.31658249 12.0976311,3.68341751 11.7071068,3.29289322 C11.3165825,2.90236893 10.6834175,2.90236893 10.2928932,3.29289322 L6,7.58578644 L1.70710678,3.29289322 Z\"/>\n</symbol><symbol id=\"spinner\" viewBox=\"0 0 32 32\">\n  <path opacity=\".25\" d=\"M16 0a16 16 0 0 0 0 32 16 16 0 0 0 0-32m0 4a12 12 0 0 1 0 24 12 12 0 0 1 0-24\"/>\n  <path d=\"M16 0a16 16 0 0 1 16 16h-4a12 12 0 0 0-12-12z\"/>\n</symbol><symbol id=\"sync\" viewBox=\"0 0 16 16\"><path fill-rule=\"evenodd\" d=\"M16 7.2V3c0-.6-.4-1-1-1-.5 0-.8.3-.9.7A8.09 8.09 0 0 0 8 0C4.9 0 2 1.8.7 4.6c-.2.5 0 1.1.5 1.3.5.2 1.1 0 1.3-.5C3.5 3.4 5.6 2 8 2c1.5 0 3 .6 4 1.5-.3 0-.6.1-.8.3-.4.4-.3 1.1.1 1.4l3 2.5h.1c.1.1.2.1.3.1h.4c.1 0 .2-.1.3-.1h.1c.1-.1.2-.1.2-.2.2 0 .2-.1.3-.3 0 .1 0 0 0 0m-1.2 2.9c-.5-.2-1.1 0-1.3.5A6 6 0 0 1 8 14c-1.5 0-2.9-.6-4-1.5.3 0 .5-.1.7-.4.4-.4.3-1.1-.1-1.4l-3-2.5h-.1L1.3 8h-.1c-.2 0-.5 0-.7.1H.4c-.1.1-.1.2-.2.3-.1.1-.1.2-.2.3V13c0 .6.4 1 1 1 .5 0 .9-.3 1-.8C3.5 14.9 5.6 16 8 16c3.1 0 5.9-1.8 7.3-4.5.2-.5 0-1.1-.5-1.4\"/></symbol><symbol id=\"team\" viewBox=\"0 0 16 16\">\n    <path fill-rule=\"evenodd\" d=\"M11.145 7.75C10.263 7.285 9.647 6.23 9.647 5c0-1.657 1.12-3 2.5-3 1.381 0 2.5 1.343 2.5 3 0 1.231-.618 2.29-1.502 2.752V9l1.105.553c.49.245 1.095.848 1.342 1.342l.106.21c.245.49 0 .895-.55.895H9.142c-.544 0-.797-.4-.55-.895l.106-.21c.245-.49.848-1.095 1.342-1.342L11.145 9V7.75zM4.647 10.8c-1.165-.48-2-1.776-2-3.3 0-1.933 1.343-3.5 3-3.5s3 1.567 3 3.5c0 1.524-.835 2.82-2 3.3V12l2.051.684c.532.177 1.15.717 1.397 1.21l.105.211c.245.49.002.895-.548.895h-8.01c-.539 0-.794-.4-.547-.895l.105-.21c.245-.49.872-1.037 1.397-1.211L4.647 12v-1.2z\"/>\n</symbol><symbol id=\"top-select\" viewBox=\"0 0 24 24\">\n  <g fill=\"#95999d\" fill-rule=\"evenodd\" transform=\"translate(12.285714, 12.000000) rotate(270.000000) translate(-12.285714, -12.000000)\">\n    <path d=\"M6.46026077,20.3174036 C5.84657974,20.9310847 5.84657974,21.9260582 6.46026077,22.5397392 C7.0739418,23.1534203 8.06891534,23.1534203 8.68259637,22.5397392 L18.1111678,13.1111678 C18.7248488,12.4974868 18.7248488,11.5025132 18.1111678,10.8888322 L8.68259637,1.46026077 C8.06891534,0.846579743 7.0739418,0.846579743 6.46026077,1.46026077 C5.84657974,2.0739418 5.84657974,3.06891534 6.46026077,3.68259637 L14.7776644,12 L6.46026077,20.3174036 Z\"/>\n  </g>\n</symbol><symbol id=\"top\" viewBox=\"0 0 24 24\">\n  <g fill-rule=\"evenodd\" transform=\"translate(12.285714, 12.000000) rotate(270.000000) translate(-12.285714, -12.000000)\">\n    <path d=\"M6.46026077,20.3174036 C5.84657974,20.9310847 5.84657974,21.9260582 6.46026077,22.5397392 C7.0739418,23.1534203 8.06891534,23.1534203 8.68259637,22.5397392 L18.1111678,13.1111678 C18.7248488,12.4974868 18.7248488,11.5025132 18.1111678,10.8888322 L8.68259637,1.46026077 C8.06891534,0.846579743 7.0739418,0.846579743 6.46026077,1.46026077 C5.84657974,2.0739418 5.84657974,3.06891534 6.46026077,3.68259637 L14.7776644,12 L6.46026077,20.3174036 Z\"/>\n  </g>\n</symbol><symbol id=\"trash\" viewBox=\"0 0 16 16\">\n  <g fill-rule=\"evenodd\" transform=\"translate(-96 -32)\">\n    <path d=\"M100.5,33 L98.0068455,33 C97.4499488,33 97,33.4477153 97,34 L97,35 L111,35 L111,34 C111,33.4438648 110.54922,33 109.993155,33 L107.5,33 L107,32 L101,32 L100.5,33 Z M98,36 L110,36 L110,45.9914698 C110,47.1007504 109.09805,48 107.99147,48 L100.00853,48 C98.8992496,48 98,47.0980496 98,45.9914698 L98,36 Z\"/>\n    <path d=\"M100.5,33 L98.0068455,33 C97.4499488,33 97,33.4477153 97,34 L97,35 L111,35 L111,34 C111,33.4438648 110.54922,33 109.993155,33 L107.5,33 L107,32 L101,32 L100.5,33 Z M98,36 L110,36 L110,45.9914698 C110,47.1007504 109.09805,48 107.99147,48 L100.00853,48 C98.8992496,48 98,47.0980496 98,45.9914698 L98,36 Z\"/>\n  </g>\n</symbol><symbol id=\"upload\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M263,102.414214 L261.707107,103.707107 C261.316582,104.097631 260.683418,104.097631 260.292893,103.707107 C259.902369,103.316582 259.902369,102.683418 260.292893,102.292893 L263.292893,99.2928932 C263.683418,98.9023689 264.316582,98.9023689 264.707107,99.2928932 L267.707107,102.292893 C268.097631,102.683418 268.097631,103.316582 267.707107,103.707107 C267.316582,104.097631 266.683418,104.097631 266.292893,103.707107 L265,102.414214 L265,110 C265,110.552285 264.552285,111 264,111 C263.447715,111 263,110.552285 263,110 L263,102.414214 Z M257,98 L271,98 C271.552285,98 272,97.5522847 272,97 C272,96.4477153 271.552285,96 271,96 L257,96 C256.447715,96 256,96.4477153 256,97 C256,97.5522847 256.447715,98 257,98 Z\" transform=\"translate(-256 -96)\"/>\n</symbol><symbol id=\"warn\" viewBox=\"0 0 48 48\"><path fill-rule=\"evenodd\" d=\"M24,48 C37.254834,48 48,37.254834 48,24 C48,10.745166 37.254834,0 24,0 C10.745166,0 0,10.745166 0,24 C0,37.254834 10.745166,48 24,48 Z M22.4965402,13.1030164 C23.3271937,11.6654101 24.6721035,11.6623183 25.5044703,13.1030164 L35.4961011,30.3969836 C36.3266815,31.8345899 35.6568766,33 33.9920699,33 L14.0079301,33 C12.3466962,33 11.6715912,31.8376817 12.5040311,30.3969836 L22.4965402,13.1030164 Z M22.5792265,18.4260768 C22.5354709,17.6384763 23.1362228,17 23.9297104,17 L24.0702896,17 C24.8598969,17 25.464841,17.6328625 25.4207735,18.4260768 L25.0554191,25.0024554 C25.024812,25.553384 24.5561352,26 24,26 C23.4477153,26 22.9752049,25.5536886 22.9445809,25.0024554 L22.5792265,18.4260768 Z M22.5,29 C22.5,28.1715729 23.1657972,27.5 24,27.5 C24.8284271,27.5 25.5,28.1657972 25.5,29 C25.5,29.8284271 24.8342028,30.5 24,30.5 C23.1715729,30.5 22.5,29.8342028 22.5,29 Z\"/></symbol><symbol id=\"warning\" viewBox=\"0 0 16 16\">\n  <g fill=\"none\" fill-rule=\"evenodd\" transform=\"translate(-288 -128)\">\n    <path fill=\"#F52D2D\" d=\"M295.021699,129.735659 C295.564898,128.777255 296.450192,128.78566 296.988422,129.735659 L303.52045,141.26497 C304.063442,142.223374 303.613566,143.000315 302.503518,143.000315 L289.50373,143.000315 C288.399102,143.000315 287.948739,142.214969 288.487174,141.26497 L295.021699,129.735659 Z M295.003624,141.000315 C295.003624,140.44803 295.447489,140.000315 296.003624,140.000315 C296.555909,140.000315 297.003624,140.444179 297.003624,141.000315 C297.003624,141.552599 296.559759,142.000315 296.003624,142.000315 C295.45134,142.000315 295.003624,141.55645 295.003624,141.000315 Z M295.003624,133.003244 C295.003624,132.449341 295.447489,132.000315 296.003624,132.000315 C296.555909,132.000315 297.003624,132.438196 297.003624,133.003244 L297.003624,137.997385 C297.003624,138.551288 296.559759,139.000315 296.003624,139.000315 C295.45134,139.000315 295.003624,138.562433 295.003624,137.997385 L295.003624,133.003244 Z\"/>\n  </g>\n</symbol><symbol id=\"cloud-broken\" viewBox=\"0 0 160 160\"><g fill=\"none\" fill-rule=\"evenodd\"><path fill=\"#93BEF8\" d=\"M61.763 130.593l-3.174 7.933h59.045-.003c23.356 0 42.369-19.126 42.369-42.634 0-22.218-16.977-40.52-38.56-42.467a42.494 42.494 0 0 0-12.426-25.27 42.873 42.873 0 0 0-4.68-3.992l-3.156 7.892c7.203 6.153 11.888 15.26 12.12 25.41.055 2.478 2.056 4.446 4.499 4.446h.34c18.71 0 33.93 15.405 33.93 34.338 0 18.936-15.22 34.34-33.93 34.34h-.324l-.01.004h-56.04zm39.415-106.538l3.157-7.892C97.128 10.86 88.462 8 79.387 8 68.245 8 57.724 12.311 49.76 20.158c-6.974 6.868-11.308 15.77-12.438 25.4-9.568 1.135-18.411 5.5-25.239 12.514C4.29 66.086 0 76.677 0 87.89c0 23.511 19 42.637 42.366 42.637H58.59l3.174-7.933H42.537c-.097-.007-.194-.007-.292-.007l-.107.007h-.275c-18.71 0-33.93-15.405-33.93-34.341 0-18.507 14.863-33.905 33.132-34.331 2.406-.056 4.343-2.017 4.398-4.45.419-18.494 15.638-33.538 33.92-33.538 8.248 0 15.873 3.062 21.795 8.122z\"/><path stroke=\"#297EF1\" stroke-linecap=\"round\" stroke-width=\"8\" d=\"M50 156L110 4\"/></g></symbol><symbol id=\"file-type-audio\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\" transform=\"translate(1 1)\"><rect width=\"30\" height=\"30\" fill=\"#ACF6F7\" rx=\"2\"/><path fill=\"#0CCBD0\" d=\"M8 19.998c-1.105 0-2 .888-2 2 0 1.105.898 2 1.998 2H9c1.657 0 3-1.35 3-2.997v-7.679a.63.63 0 0 1 .492-.601l6.016-1.129c.272-.05.492.124.492.418v5.478c0 .282-.215.51-.49.51H17c-1.105 0-2 .904-2 1.997v-.179a2 2 0 0 0 1.998 1.997H18c1.657 0 3-1.349 3-2.993V7c0-.554-.445-.921-.976-.825L10.976 7.82C10.437 7.918 10 8.454 10 9v10.498c0 .276-.215.5-.49.5H8z\"/></g></symbol><symbol id=\"file-type-bin\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\"><path fill=\"#D1D5DB\" d=\"M3 2.002C3 .896 3.89 0 4.997 0H22l7 7v22.996A2 2 0 0 1 27.003 32H4.997A1.995 1.995 0 0 1 3 29.998V2.002z\"/><path fill=\"#A3ACB8\" d=\"M21.5 0c-.276 0-.5.23-.5.5V8h7.5c.276 0 .5-.232.5-.5V7l-7-7h-.5z\"/><path fill=\"#4F5B69\" d=\"M7 15.568c0-.597.06-1.12.178-1.568.118-.449.285-.82.5-1.115.215-.295.473-.516.772-.664.3-.147.633-.221 1.001-.221.786 0 1.391.29 1.815.87.424.58.636 1.479.636 2.698 0 .602-.059 1.128-.177 1.577-.119.449-.286.822-.501 1.12-.215.298-.474.521-.776.669a2.265 2.265 0 0 1-1.006.22c-.792 0-1.397-.306-1.815-.918C7.209 17.623 7 16.734 7 15.568zm3.705 0a9.152 9.152 0 0 0-.019-.58l-2.292 2.191c.193.597.546.895 1.057.895.4 0 .708-.2.926-.6.219-.4.328-1.035.328-1.906zm-2.507 0a7.965 7.965 0 0 0 .018.55l2.283-2.192c-.187-.563-.54-.845-1.057-.845-.4 0-.707.202-.922.605-.215.402-.322 1.03-.322 1.882zm5.35 0c0-.597.06-1.12.179-1.568.118-.449.285-.82.5-1.115.215-.295.473-.516.772-.664.3-.147.633-.221 1.001-.221.786 0 1.39.29 1.815.87.424.58.636 1.479.636 2.698 0 .602-.06 1.128-.178 1.577-.118.449-.285.822-.5 1.12-.215.298-.474.521-.777.669a2.265 2.265 0 0 1-1.005.22c-.792 0-1.397-.306-1.815-.918-.418-.613-.627-1.502-.627-2.668zm3.706 0a9.153 9.153 0 0 0-.02-.58l-2.291 2.191c.193.597.546.895 1.057.895.4 0 .708-.2.926-.6.218-.4.328-1.035.328-1.906zm-2.508 0a7.965 7.965 0 0 0 .02.55l2.282-2.192c-.187-.563-.54-.845-1.057-.845-.4 0-.707.202-.922.605-.215.402-.323 1.03-.323 1.882zm5.988 2.368h1.431v-4.295l-1.235.993-.561-.786 2.133-1.71h.823v5.798h1.404v1.081h-3.995v-1.08zM7 24.413c0-.596.06-1.119.178-1.568.118-.449.285-.82.5-1.115.215-.295.473-.516.772-.664.3-.147.633-.22 1.001-.22.786 0 1.391.29 1.815.869.424.58.636 1.48.636 2.698 0 .603-.059 1.128-.177 1.577-.119.449-.286.822-.501 1.12-.215.299-.474.521-.776.669A2.265 2.265 0 0 1 9.442 28c-.792 0-1.397-.306-1.815-.919C7.209 26.468 7 25.58 7 24.413zm3.705 0a9.152 9.152 0 0 0-.019-.58l-2.292 2.192c.193.596.546.894 1.057.894.4 0 .708-.2.926-.6.219-.4.328-1.035.328-1.906zm-2.507 0a7.965 7.965 0 0 0 .018.55l2.283-2.192c-.187-.563-.54-.845-1.057-.845-.4 0-.707.202-.922.605-.215.403-.322 1.03-.322 1.882zm5.987 2.368h1.431v-4.295l-1.235.993-.56-.786 2.132-1.71h.824v5.798h1.403v1.081h-3.995v-1.08zm5.913-2.368c0-.596.059-1.119.177-1.568.119-.449.286-.82.501-1.115.215-.295.472-.516.772-.664.3-.147.633-.22 1-.22.787 0 1.392.29 1.816.869.424.58.636 1.48.636 2.698 0 .603-.06 1.128-.178 1.577-.118.449-.285.822-.5 1.12-.215.299-.474.521-.777.669A2.265 2.265 0 0 1 22.54 28c-.793 0-1.398-.306-1.815-.919-.418-.613-.627-1.502-.627-2.668zm3.704 0a9.152 9.152 0 0 0-.018-.58l-2.292 2.192c.193.596.545.894 1.057.894.399 0 .708-.2.926-.6.218-.4.327-1.035.327-1.906zm-2.507 0a7.965 7.965 0 0 0 .019.55l2.283-2.192c-.187-.563-.54-.845-1.057-.845-.4 0-.707.202-.922.605-.215.403-.323 1.03-.323 1.882z\"/></g></symbol><symbol id=\"file-type-code\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\"><path fill=\"#E6D5FF\" d=\"M3 2.002C3 .896 3.89 0 4.997 0H22l7 7v22.996A2 2 0 0 1 27.003 32H4.997A1.995 1.995 0 0 1 3 29.998V2.002z\"/><path fill=\"#9C59FF\" d=\"M21.5 0c-.276 0-.5.23-.5.5V8h7.5c.276 0 .5-.232.5-.5V7l-7-7h-.5z\"/><g stroke=\"#9C59FF\" stroke-width=\"2\"><path stroke-linejoin=\"round\" d=\"M12 22l-4-4 4-4M20 22l4-4-4-4\"/><path d=\"M14 25l4-14\"/></g></g></symbol><symbol id=\"file-type-files\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\"><path fill=\"#D1D5DB\" d=\"M3 2.002C3 .896 3.89 0 4.997 0H22l7 7v22.996A2 2 0 0 1 27.003 32H4.997A1.995 1.995 0 0 1 3 29.998V2.002z\"/><path fill=\"#A3ACB8\" d=\"M21.5 0c-.276 0-.5.23-.5.5V8h7.5c.276 0 .5-.232.5-.5V7l-7-7h-.5z\"/></g></symbol><symbol id=\"file-type-folder\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\" transform=\"translate(0 2)\"><rect width=\"32\" height=\"26\" y=\"2\" fill=\"#B2D3FF\" rx=\"2\"/><path fill=\"#197BFF\" d=\"M0 .99C0 .445.45 0 1.007 0h11.986c.556 0 1.32.313 1.718.71l.578.58c.393.392 1.156.71 1.712.71h13.005C31.107 2 32 2.895 32 4H17c-.552 0-1.313.313-1.71.71l-.58.58c-.392.392-1.16.71-1.717.71H1.007A1.004 1.004 0 0 1 0 5.01V.99z\"/></g></symbol><symbol id=\"file-type-image\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\" transform=\"translate(0 3)\"><rect width=\"32\" height=\"26\" fill=\"#8EE39B\" rx=\"2\"/><path fill=\"#1EC737\" d=\"M0 20l6.29-6.29a.999.999 0 0 1 1.416-.004L11 17l8.294-8.294a1.003 1.003 0 0 1 1.412 0L32 20v4.002C32 25.106 31.11 26 29.998 26H2.002A2.002 2.002 0 0 1 0 24.002V20z\"/><circle cx=\"8\" cy=\"7\" r=\"3\" fill=\"#FFF\"/><path stroke=\"#8EE39B\" d=\"M11 16l-5.5 5.5L11 16z\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></g></symbol><symbol id=\"file-type-pdf\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\"><path fill=\"#FCD0D5\" d=\"M3 2.002C3 .896 3.89 0 4.997 0H22l7 7v22.996A2 2 0 0 1 27.003 32H4.997A1.995 1.995 0 0 1 3 29.998V2.002z\"/><path fill=\"#F1132D\" d=\"M21.5 0c-.276 0-.5.23-.5.5V8h7.5c.276 0 .5-.232.5-.5V7l-7-7h-.5zM9 11h14v2H9v-2zm0 4h12v2H9v-2zm.066 4.784h1.904c.283 0 .548.028.796.084.248.056.464.15.648.28.184.13.33.304.436.52.107.216.16.481.16.796 0 .304-.055.568-.164.792-.11.224-.257.408-.444.552a1.89 1.89 0 0 1-.648.32 2.87 2.87 0 0 1-.784.104h-.728V25H9.066v-5.216zm1.832 2.512c.64 0 .96-.277.96-.832 0-.272-.081-.464-.244-.576-.163-.112-.401-.168-.716-.168h-.656v1.576h.656zm3.016-2.512h1.472c.4 0 .76.05 1.08.152.32.101.595.257.824.468.23.21.405.479.528.804.123.325.184.712.184 1.16 0 .448-.061.837-.184 1.168-.123.33-.296.604-.52.82a2.137 2.137 0 0 1-.804.484c-.312.107-.66.16-1.044.16h-1.536v-5.216zm1.4 4.264c.224 0 .427-.03.608-.088.181-.059.336-.153.464-.284.128-.13.228-.303.3-.516.072-.213.108-.477.108-.792 0-.31-.036-.57-.108-.78a1.263 1.263 0 0 0-.3-.504 1.092 1.092 0 0 0-.464-.268 2.152 2.152 0 0 0-.608-.08h-.224v3.312h.224zm3.68-4.264h3.288v.992H20.17v1.208h1.808v.992H20.17V25h-1.176v-5.216z\"/></g></symbol><symbol id=\"file-type-sheet\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\"><path fill=\"#9FE6A2\" d=\"M3 2.002C3 .896 3.89 0 4.997 0H22l7 7v22.996A2 2 0 0 1 27.003 32H4.997A1.995 1.995 0 0 1 3 29.998V2.002z\"/><path fill=\"#0FC016\" d=\"M21.5 0c-.276 0-.5.23-.5.5V8h7.5c.276 0 .5-.232.5-.5V7l-7-7h-.5zM8 9h4v2H8V9zm0-4h4v2H8V5zm0 8h4v2H8v-2zm0 4h4v2H8v-2zm0 4h4v2H8v-2zm0 4h4v2H8v-2zm6-16h4v2h-4V9zm0-4h4v2h-4V5zm0 8h4v2h-4v-2zm0 4h4v2h-4v-2zm0 4h4v2h-4v-2zm0 4h4v2h-4v-2zm6-12h4v2h-4v-2zm0 4h4v2h-4v-2zm0 4h4v2h-4v-2zm0 4h4v2h-4v-2z\"/></g></symbol><symbol id=\"file-type-slide\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\"><path fill=\"#FFDEC1\" d=\"M0 3.991C0 2.891.89 2 2.004 2H25l7 7v19.005C32 29.107 31.11 30 29.998 30H2.002C.896 30 0 29.1 0 28.009V3.99z\"/><path fill=\"#FF9433\" d=\"M24.5 2c-.276 0-.5.23-.5.5V10h7.5c.276 0 .5-.232.5-.5V9l-7-7h-.5zM9.996 18h16v2h-16v-2zm0 4h16v2h-16v-2zM6 18h2v2H6v-2zm0 4h2v2H6v-2zm10-6a4 4 0 0 0 4-4h-4V8a4 4 0 1 0 0 8zm1-5V7c2 0 4 2 4 4h-4z\"/></g></symbol><symbol id=\"file-type-text\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\"><path fill=\"#B2D3FF\" d=\"M3 2.002C3 .896 3.89 0 4.997 0H22l7 7v22.996A2 2 0 0 1 27.003 32H4.997A1.995 1.995 0 0 1 3 29.998V2.002z\"/><path fill=\"#197BFF\" d=\"M21.5 0c-.276 0-.5.23-.5.5V8h7.5c.276 0 .5-.232.5-.5V7l-7-7h-.5zM9 11h14v2H9v-2zm0 4h12v2H9v-2zm0 4h14v2H9v-2zm0 4h10v2H9v-2z\"/></g></symbol><symbol id=\"file-type-video\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\"><path fill=\"#FFC5CE\" d=\"M1 2.992C1 1.892 1.898 1 2.992 1h26.016C30.108 1 31 1.898 31 2.992v26.016c0 1.1-.898 1.992-1.992 1.992H2.992C1.892 31 1 30.102 1 29.008V2.992zm1 12.017C2 14.452 2.443 14 3.01 14h1.98c.558 0 1.01.443 1.01 1.01v1.98C6 17.549 5.557 18 4.99 18H3.01C2.451 18 2 17.557 2 16.99v-1.98zm24 0c0-.557.443-1.009 1.01-1.009h1.98c.558 0 1.01.443 1.01 1.01v1.98c0 .558-.443 1.01-1.01 1.01h-1.98c-.558 0-1.01-.443-1.01-1.01v-1.98zM2 9A1 1 0 0 1 3.01 8h1.98C5.549 8 6 8.444 6 9v3a1 1 0 0 1-1.01 1H3.01C2.451 13 2 12.556 2 12V9zm24 0A1 1 0 0 1 27.01 8h1.98c.558 0 1.01.444 1.01 1v3a1 1 0 0 1-1.01 1h-1.98c-.558 0-1.01-.444-1.01-1V9zM2 26A1 1 0 0 1 3.01 25h1.98c.558 0 1.01.444 1.01 1v3a1 1 0 0 1-1.01 1H3.01C2.451 30 2 29.556 2 29v-3zm24 0A1 1 0 0 1 27.01 25h1.98c.558 0 1.01.444 1.01 1v3a1 1 0 0 1-1.01 1h-1.98c-.558 0-1.01-.444-1.01-1v-3zM2 3A1 1 0 0 1 3.01 2h1.98C5.549 2 6 2.444 6 3v3a1 1 0 0 1-1.01 1H3.01C2.451 7 2 6.556 2 6V3zm24 0A1 1 0 0 1 27.01 2h1.98c.558 0 1.01.444 1.01 1v3a1 1 0 0 1-1.01 1h-1.98C26.451 7 26 6.556 26 6V3zM2 20A1 1 0 0 1 3.01 19h1.98c.558 0 1.01.444 1.01 1v3a1 1 0 0 1-1.01 1H3.01C2.451 24 2 23.556 2 23v-3zm24 0A1 1 0 0 1 27.01 19h1.98c.558 0 1.01.444 1.01 1v3a1 1 0 0 1-1.01 1h-1.98c-.558 0-1.01-.444-1.01-1v-3z\"/><path fill=\"#FF405D\" d=\"M12 10.615c0-.554.38-.775.853-.491l8.294 4.977c.471.282.473.739 0 1.023L12.853 21.1c-.471.282-.853.055-.853-.491v-9.995z\"/></g></symbol><symbol id=\"file-type-zip\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\" transform=\"translate(3)\"><rect width=\"26\" height=\"32\" fill=\"#D1D5DB\" rx=\"2\"/><path fill=\"#4F5B69\" d=\"M11 1h2v2h-2V1zm0 4h2v2h-2V5zm0 4h2v2h-2V9zm2-6h2v2h-2V3zm0 4h2v2h-2V7zm-2 5h4v7h-4v-7zm1 1h2v2h-2v-2z\"/></g></symbol></svg>";
+module.exports = "<svg><defs>\n        <path d=\"M164,261 C164,258.790861 165.790861,257 168,257 C170.209139,257 172,258.790861 172,261 C174.209139,261 176,262.790861 176,265 C176,267.209139 174.209139,269 172,269 L164,269 C161.790861,269 160,267.209139 160,265 C160,262.790861 161.790861,261 164,261 Z M165.146447,264.853553 C165.300738,265.007845 165.568968,265.222429 165.939431,265.434122 C166.557029,265.787035 167.249166,266 168,266 C168.750834,266 169.442971,265.787035 170.060569,265.434122 C170.431032,265.222429 170.699262,265.007845 170.853553,264.853553 C171.048816,264.658291 171.048816,264.341709 170.853553,264.146447 C170.658291,263.951184 170.341709,263.951184 170.146447,264.146447 C170.050738,264.242155 169.850218,264.402571 169.564431,264.565878 C169.088279,264.837965 168.561666,265 168,265 C167.438334,265 166.911721,264.837965 166.435569,264.565878 C166.149782,264.402571 165.949262,264.242155 165.853553,264.146447 C165.658291,263.951184 165.341709,263.951184 165.146447,264.146447 C164.951184,264.341709 164.951184,264.658291 165.146447,264.853553 Z\" id=\"path-1\"/>\n    \n        <path d=\"M8,2 C11.637,2 14.742,4.488 16,8 C14.742,11.512 11.637,14 8,14 C4.363,14 1.258,11.512 0,8 C1.258,4.488 4.363,2 8,2 Z M8,12 C10.209,12 12,10.209 12,8 C12,5.791 10.209,4 8,4 C5.791,4 4,5.791 4,8 C4,10.209 5.791,12 8,12 Z M8,6 C9.104,6 10,6.896 10,8 C10,9.104 9.104,10 8,10 C6.896,10 6,9.104 6,8 C6,6.896 6.896,6 8,6 Z\" id=\"path-1\"/>\n    \n    <path id=\"file-none-a\" d=\"M10,5.0999 L10,2 L4,2 C3.45,2 3,2.45 3,3 L3,13 C3,13.55 3.45,14 4,14 L12,14 C12.55,14 13,13.55 13,13 L13,6 L11.1001,6 L11.5,6.3999 L9.4,8.4999 L11.5,10.5999 L10.1,11.9999 L8,9.8999 L5.9,11.9999 L4.5,10.5999 L6.6,8.4999 L4.5,6.3999 L5.9,4.9999 L8,7.0999 L10,5.0999 Z M15,5 L15,15.004 C15,15.555 14.55,16 13.993,16 L2.007,16 C1.451,16 1,15.556 1,14.999 L1,1.001 C1,0.448 1.446,0 1.998,0 L10,0 L11,0 L15,4 L15,5 Z\"/>\n  \n    <path id=\"file-a\" d=\"M1,1.00087166 C1,0.448105505 1.4463114,0 1.99754465,0 L10,0 L10,5 L15,5 L15,15.0044225 C15,15.5542648 14.5500512,16 13.9931545,16 L2.00684547,16 C1.45078007,16 1,15.5553691 1,14.9991283 L1,1.00087166 Z M11,4 L11,0 L15,4 L11,4 Z\"/>\n  <path d=\"M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16zm1-7.198C10.122 8.355 11 7.21 11 6c0-1.552-1.448-3-3-3S5 4.448 5 6h2c0-.448.552-1 1-1 .448 0 1 .552 1 1 0 .448-.552 1-1 1a1 1 0 0 0-1 1v2h2V8.802zM7 11v2h2v-2H7z\" id=\"a\"/>\n        <path d=\"M8,12.038 C5.791,12.038 4,10.247 4,8.03800005 C4,7.45100005 4.134,6.89700005 4.361,6.39500005 L6,8.03400005 L6,8.03800005 C6,9.14200005 6.896,10.038 8,10.038 C8.001,10.038 8.003,10.038 8.004,10.038 L9.644,11.677 C9.141,11.904 8.587,12.038 8,12.038 Z M1.115,1.20000005 L13.842,13.905 L12.856,14.891 L11.296,13.329 C10.362,13.757 9.276,14.038 8,14.038 C2,14.038 0,8.03800005 0,8.03800005 C0,8.03800005 0.662,6.06900005 2.353,4.38600005 L0.141,2.17500005 L1.115,1.20000005 Z M6.3105,4.42470005 L4.6515,2.76570005 C5.5945,2.32370005 6.7005,2.03770005 7.9995,2.03770005 C13.9995,2.03770005 15.9995,8.03770005 15.9995,8.03770005 C15.9995,8.03770005 15.3285,10.0347 13.6105,11.7247 L11.6135,9.72770005 C11.8545,9.21270005 11.9995,8.64470005 11.9995,8.03770005 C11.9995,5.82870005 10.2085,4.03770005 7.9995,4.03770005 C7.3935,4.03770005 6.8255,4.18270005 6.3105,4.42470005 Z M8,6.03800005 C9.104,6.03800005 10,6.93400005 10,8.03800005 C10,8.06200005 9.994,8.08400005 9.993,8.10700005 L7.931,6.04500005 C7.954,6.04400005 7.977,6.03800005 8,6.03800005 Z\" id=\"path-1\"/>\n    \n    <path id=\"hourglass-a\" d=\"M4.4997,13 C4.4997,12.453 4.8397,11.709 5.2597,11.349 L7.9997,9 L10.7407,11.349 C11.1637,11.712 11.4997,12.447 11.4997,13 L4.4997,13 Z M11.4997,3 C11.4997,3.547 11.1597,4.292 10.7407,4.651 L10.3327,5 L5.6667,5 L5.2597,4.651 C4.8357,4.288 4.4997,3.552 4.4997,3 L11.4997,3 Z M12.9997,13 C12.9997,12.443 12.6837,11.684 12.2937,11.294 L8.9997,8 L12.2937,4.706 C12.6837,4.316 12.9997,3.556 12.9997,3 L12.9997,2 C13.5507,2 13.9997,1.556 13.9997,1 C13.9997,0.448 13.5437,0 12.9977,0 L3.0027,0 C2.4487,0 1.9997,0.444 1.9997,1 C1.9997,1.552 2.4557,2 3.0027,2 L2.9997,3 C2.9997,3.552 3.3127,4.312 3.7057,4.706 L6.9997,8 L3.7057,11.294 C3.3127,11.688 2.9997,12.447 2.9997,13 L2.9997,14 C2.4557,14 1.9997,14.447 1.9997,15 C1.9997,15.556 2.4487,16 3.0027,16 L12.9977,16 C13.5437,16 13.9997,15.553 13.9997,15 C13.9997,14.443 13.5507,14 12.9977,14 L12.9997,13 Z\"/>\n  <path id=\"info\" d=\"M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16zM7 4a1 1 0 1 0 2 0 1 1 0 1 0-2 0zm1 2H6v2h1v4a1 1 0 0 0 1 1h2v-2H9V7a1 1 0 0 0-1-1z\"/>\n    <path id=\"pen\" d=\"M9.5 3.5l3 3L3.04 16H0v-2.97L9.5 3.5zM14.91.92l.18.17c.77.78.78 2.05 0 2.84L14.03 5 11 2 12.09.91a2 2 0 0 1 2.82 0z\"/>\n  \n    <polygon id=\"plus-a\" points=\"7 0 9 0 9 7 16 7 16 9 9 9 9 16 7 16 7 9 0 9 0 7 7 7\"/>\n  \n        <path id=\"plus-small\" d=\"M4 4V1a1 1 0 1 1 2 0v3h3a1 1 0 1 1 0 2H6v3a1 1 0 1 1-2 0V6H1a1 1 0 1 1 0-2h3z\"/>\n    </defs><symbol id=\"album-add\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M65,99.0094776 C65,97.347389 66.3423789,96 68.0033512,96 L77.9931545,96 C78.5492199,96 79,96.4438648 79,97 C79,97.5522847 78.544239,98 77.9975267,98 L68.0024733,98 C67.4488226,98 67,98.4438648 67,99 C67,99.5522847 67.455761,100 68.0024733,100 L77.9975267,100 C78.5511774,100 79,100.455761 79,101.002473 L79,110.997527 C79,111.551177 78.5500512,112 77.9931545,112 L68.0033512,112 C66.3446462,112 65,110.663369 65,108.990522 L65,99.0094776 Z M72,102 L74,102 L74,105 L77,105 L77,107 L74,107 L74,110 L72,110 L72,107 L69,107 L69,105 L72,105 L72,102 Z\" transform=\"translate(-64 -96)\"/>\n</symbol><symbol id=\"album-remove\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M65,99.009C65,97.347 66.342,96 68.003,96L77.993,96C78.549,96 79,96.444 79,97C79,97.552 78.544,98 77.998,98L68.002,98C67.449,98 67,98.444 67,99C67,99.552 67.456,100 68.002,100L77.998,100C78.551,100 79,100.456 79,101.002L79,110.998C79,111.551 78.55,112 77.993,112L68.003,112C66.345,112 65,110.663 65,108.991L65,99.009ZM72,105L77,105L77,107L74,107L72,107L69,107L69,105L72,105Z\" transform=\"translate(-64 -96)\"/>\n</symbol><symbol id=\"album\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M33,99.0094776 C33,97.347389 34.3423789,96 36.0033512,96 L45.9931545,96 C46.5492199,96 47,96.4438648 47,97 L47,97 C47,97.5522847 46.544239,98 45.9975267,98 L36.0024733,98 C35.4488226,98 35,98.4438648 35,99 L35,99 C35,99.5522847 35.4509752,100 35.990778,100 L40.5089948,100 C40.7801695,100 41,100.22788 41,100.491005 L41,106 L42.5,105 L44,106 L44,100.491005 C44,100.219831 44.2157526,100 44.495389,100 L46.0010434,100 C46.5527519,100 47,100.455761 47,101.002473 L47,110.997527 C47,111.551177 46.5500512,112 45.9931545,112 L36.0033512,112 C34.3446462,112 33,110.663369 33,108.990522 L33,99.0094776 Z\" transform=\"translate(-32 -96)\"/>\n</symbol><symbol id=\"arrow-left\"><path d=\"M3.57 13l10.106 9.263a1 1 0 1 1-1.352 1.474L.327 12.74a.997.997 0 0 1 0-1.48L12.324.263a1 1 0 1 1 1.352 1.474L3.57 11H23a1 1 0 1 1 0 2H3.57z\"/></symbol><symbol id=\"arrow-right\"><path d=\"M20.43 13l-10.106 9.263a1 1 0 1 0 1.352 1.474L23.673 12.74a.997.997 0 0 0 0-1.48L11.676.263a1 1 0 0 0-1.352 1.474L20.43 11H1a1 1 0 1 0 0 2h19.43z\"/></symbol><symbol id=\"arrow\">\n  <polyline points=\"14.764,4.966 8.053,11.677 1.342,4.966\"/>\n</symbol><symbol id=\"back\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M10.70725,2.70725 C11.09825,2.31625 11.09825,1.68425 10.70725,1.29325 C10.31625,0.90225 9.68425,0.90225 9.29325,1.29325 L3.29325,7.29325 C2.90225,7.68425 2.90225,8.31625 3.29325,8.70725 L9.29325,14.70725 C9.68425,15.09825 10.31625,15.09825 10.70725,14.70725 C11.09825,14.31625 11.09825,13.68425 10.70725,13.29325 L5.41425,8.00025 L10.70725,2.70725 Z\"/>\n</symbol><symbol id=\"bottom-select\" viewBox=\"0 0 24 24\">\n  <g fill=\"#95999d\" fill-rule=\"evenodd\" transform=\"translate(12.285714, 12.000000) rotate(90.000000) translate(-12.285714, -12.000000)\">\n    <path d=\"M6.46026077,20.3174036 C5.84657974,20.9310847 5.84657974,21.9260582 6.46026077,22.5397392 C7.0739418,23.1534203 8.06891534,23.1534203 8.68259637,22.5397392 L18.1111678,13.1111678 C18.7248488,12.4974868 18.7248488,11.5025132 18.1111678,10.8888322 L8.68259637,1.46026077 C8.06891534,0.846579743 7.0739418,0.846579743 6.46026077,1.46026077 C5.84657974,2.0739418 5.84657974,3.06891534 6.46026077,3.68259637 L14.7776644,12 L6.46026077,20.3174036 Z\"/>\n  </g>\n</symbol><symbol id=\"bottom\" viewBox=\"0 0 24 24\">\n  <g fill-rule=\"evenodd\" transform=\"translate(12.285714, 12.000000) rotate(90.000000) translate(-12.285714, -12.000000)\">\n    <path d=\"M6.46026077,20.3174036 C5.84657974,20.9310847 5.84657974,21.9260582 6.46026077,22.5397392 C7.0739418,23.1534203 8.06891534,23.1534203 8.68259637,22.5397392 L18.1111678,13.1111678 C18.7248488,12.4974868 18.7248488,11.5025132 18.1111678,10.8888322 L8.68259637,1.46026077 C8.06891534,0.846579743 7.0739418,0.846579743 6.46026077,1.46026077 C5.84657974,2.0739418 5.84657974,3.06891534 6.46026077,3.68259637 L14.7776644,12 L6.46026077,20.3174036 Z\"/>\n  </g>\n</symbol><symbol id=\"calendar\"><path d=\"M13 1h3v2H0V1h3V0h2v1h6V0h2v1zM0 4h16v10.998A1 1 0 0 1 15 16H1c-.552 0-1-.456-1-1.002V4zm2 2v8h12V6H2zm6 3h5v4H8V9z\" fill-rule=\"nonzero\"/></symbol><symbol id=\"check-circleless\" viewBox=\"0 0 16 16\">\n  <g transform=\"translate(-32 -128)\">\n    <path d=\"M33.7071068,138.292893 C33.3165825,137.902369 32.6834175,137.902369 32.2928932,138.292893 C31.9023689,138.683418 31.9023689,139.316582 32.2928932,139.707107 L35.2928932,142.707107 C35.6834175,143.097631 36.3165825,143.097631 36.7071068,142.707107 L47.7071068,131.707107 C48.0976311,131.316582 48.0976311,130.683418 47.7071068,130.292893 C47.3165825,129.902369 46.6834175,129.902369 46.2928932,130.292893 L36,140.585786 L33.7071068,138.292893 Z\"/>\n  </g>\n</symbol><symbol id=\"check\" viewBox=\"0 0 20 20\">\n    <path d=\"M3 10.019l4.523 4.523 9.541-9.541\" stroke=\"currentColor\" stroke-width=\"2\" fill=\"none\"/>\n</symbol><symbol id=\"clock\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M136,48 C140.418278,48 144,44.418278 144,40 C144,35.581722 140.418278,32 136,32 C131.581722,32 128,35.581722 128,40 C128,44.418278 131.581722,48 136,48 Z M135,40 C135,40.2652165 135.105357,40.5195704 135.292893,40.7071068 L138.292893,43.7071068 C138.683418,44.0976311 139.316582,44.0976311 139.707107,43.7071068 C140.097631,43.3165825 140.097631,42.6834175 139.707107,42.2928932 L137,39.6004639 L137,36 C137,35.4477153 136.552285,35 136,35 C135.447715,35 135,35.4477153 135,36 L135,40 Z\" transform=\"translate(-128 -32)\"/>\n</symbol><symbol id=\"connector\" viewBox=\"0 0 20 27\">\n<title>collect</title>\n<desc>Created with Sketch.</desc>\n<g id=\"_xD83D__xDCE6_-components\">\n\t<g id=\"icons_x2F_apps_x2F_connector-box\" transform=\"translate(-50.000000, -46.000000)\">\n\t\t<g id=\"icons_x2F_connect-data-pastille_x2F_box\" transform=\"translate(40.000000, 40.000000)\">\n\t\t\t<g id=\"collect\" transform=\"translate(10.000000, 6.250000)\">\n\t\t\t\t<g id=\"Combined-Shape\">\n\t\t\t\t\t<path id=\"path-1_1_\" d=\"M9.7,13.2c0.1,0.1,0.2,0.1,0.3,0.1c0.1,0,0.2,0,0.3-0.1l6.2-5.8c0.1-0.1,0.1-0.2,0.1-0.3\n\t\t\t\t\t\tc0-0.1,0-0.1,0-0.2c-0.1-0.2-0.2-0.3-0.4-0.3h-3V0.4c0-0.2-0.2-0.4-0.4-0.4H7C6.8,0,6.6,0.2,6.6,0.4v6.2H3.8\n\t\t\t\t\t\tc-0.2,0-0.3,0.1-0.4,0.3c0,0.1,0,0.1,0,0.2c0,0.1,0,0.2,0.1,0.3L9.7,13.2z\"/>\n\t\t\t\t</g>\n\t\t\t\t<path id=\"Shape\" d=\"M19.7,11.5l-3.3-1.6l-1.8,1.7l2.9,1.4L10,16.7l-7.5-3.7l2.9-1.4L3.6,9.8l-3.3,1.6C0.1,11.6,0,11.8,0,12v9.3\n\t\t\t\t\tc0,0.2,0.1,0.5,0.3,0.6l9.4,4.7c0.1,0,0.2,0.1,0.3,0.1c0.1,0,0.2,0,0.3-0.1l9.4-4.7c0.2-0.1,0.3-0.3,0.3-0.6V12\n\t\t\t\t\tC20,11.8,19.9,11.6,19.7,11.5z\"/>\n\t\t\t</g>\n\t\t</g>\n\t</g>\n</g>\n</symbol><symbol id=\"cozy-negative\" viewBox=\"0 0 16 16\">\n    \n    <g id=\"16px\" stroke=\"none\" stroke-width=\"1\" fill-rule=\"evenodd\" transform=\"translate(-160.000000, -255.000000)\">\n        <g id=\"slices\" transform=\"translate(32.000000, 32.000000)\"/>\n        <mask id=\"mask-2\" fill=\"white\">\n            <use xlink:href=\"#path-1\"/>\n        </mask>\n        <use id=\"Mask\" xlink:href=\"#path-1\"/>\n    </g>\n</symbol><symbol id=\"cozy\" viewBox=\"0 0 52 52\">\n  <path fill=\"#297EF2\" fill-rule=\"evenodd\" d=\"M558.23098,44 L533.76902,44 C526.175046,44 520,37.756072 520,30.0806092 C520,26.4203755 521.393962,22.9628463 523.927021,20.3465932 C526.145918,18.0569779 529.020185,16.6317448 532.129554,16.2609951 C532.496769,13.1175003 533.905295,10.2113693 536.172045,7.96901668 C538.760238,5.40737823 542.179607,4 545.800788,4 C549.420929,4 552.841339,5.40737823 555.429532,7.96796639 C557.686919,10.2008665 559.091284,13.0912433 559.467862,16.2179336 C566.482405,16.8533543 572,22.8284102 572,30.0816594 C572,37.756072 565.820793,44 558.22994,44 L558.23098,44 Z M558.068077,40.9989547 L558.171599,40.9989547 C564.142748,40.9989547 569,36.0883546 569,30.0520167 C569,24.0167241 564.142748,19.1061239 558.171599,19.1061239 L558.062901,19.1061239 C557.28338,19.1061239 556.644649,18.478972 556.627051,17.6887604 C556.492472,11.7935317 551.63729,7 545.802791,7 C539.968291,7 535.111039,11.7956222 534.977495,17.690851 C534.959896,18.4664289 534.34187,19.0914904 533.573737,19.1092597 C527.743378,19.2451426 523,24.1536522 523,30.0530619 C523,36.0893999 527.857252,41 533.828401,41 L533.916395,41 L533.950557,40.9979094 C533.981614,40.9979094 534.01267,40.9979094 534.043727,41 L558.064971,41 L558.068077,40.9989547 Z M553.766421,29.2227318 C552.890676,28.6381003 552.847676,27.5643091 552.845578,27.5171094 C552.839285,27.2253301 552.606453,26.9957683 552.32118,27.0000592 C552.035908,27.0054228 551.809368,27.2467844 551.814612,27.5364185 C551.81671,27.5750363 551.831393,28.0792139 552.066323,28.6735 C548.949302,31.6942753 544.051427,31.698566 540.928113,28.6917363 C541.169336,28.0888684 541.185068,27.576109 541.185068,27.5374911 C541.190312,27.2478572 540.964821,27.0086409 540.681646,27.0011319 C540.401618,26.9925502 540.163541,27.2264027 540.154102,27.5160368 C540.154102,27.5589455 540.11215,28.6370275 539.234308,29.2216592 C538.995183,29.3825669 538.92806,29.7097461 539.08433,29.9532532 C539.182917,30.1077246 539.346529,30.1924694 539.516434,30.1924694 C539.612923,30.1924694 539.710461,30.1645787 539.797512,30.1066519 C540.023003,29.9564713 540.211786,29.7848363 540.370154,29.6024742 C542.104862,31.2008247 544.296845,32 546.488828,32 C548.686055,32 550.883282,31.1976066 552.621136,29.5917471 C552.780553,29.7762546 552.971434,29.9521804 553.203218,30.1066519 C553.289219,30.1645787 553.387806,30.1924694 553.484295,30.1924694 C553.652102,30.1924694 553.816763,30.1066519 553.916399,29.9521804 C554.07162,29.7076006 554.004497,29.3793488 553.766421,29.2205864 L553.766421,29.2227318 Z\" transform=\"translate(-520)\"/>\n</symbol><symbol id=\"cross\" viewBox=\"0 0 24 24\">\n  <path fill-rule=\"evenodd\" d=\"M106.585786,44 L96.2928932,33.7071068 C95.9023689,33.3165825 95.9023689,32.6834175 96.2928932,32.2928932 C96.6834175,31.9023689 97.3165825,31.9023689 97.7071068,32.2928932 L108,42.5857864 L118.292893,32.2928932 C118.683418,31.9023689 119.316582,31.9023689 119.707107,32.2928932 C120.097631,32.6834175 120.097631,33.3165825 119.707107,33.7071068 L109.414214,44 L119.707107,54.2928932 C120.097631,54.6834175 120.097631,55.3165825 119.707107,55.7071068 C119.316582,56.0976311 118.683418,56.0976311 118.292893,55.7071068 L108,45.4142136 L97.7071068,55.7071068 C97.3165825,56.0976311 96.6834175,56.0976311 96.2928932,55.7071068 C95.9023689,55.3165825 95.9023689,54.6834175 96.2928932,54.2928932 L106.585786,44 Z\" transform=\"translate(-96 -32)\"/>\n</symbol><symbol id=\"cross-small\" viewBox=\"0 0 12 12\">\n  <path d=\"M6 4.59l2.3-2.3a1 1 0 0 1 1.4 1.42L7.42 6l2.3 2.3A1 1 0 1 1 8.3 9.7L6 7.42l-2.3 2.3A1 1 0 1 1 2.3 8.3L4.58 6l-2.3-2.3A1 1 0 0 1 3.7 2.3L6 4.58z\"/>\n</symbol><symbol id=\"cube\" viewBox=\"0 0 16 16\">\n  <path d=\"M1,11.0086308 L1,5.50051502 C1,4.95127159 1.3905874,4.72776572 1.87240137,5.00308799 L7.12759863,8.00605786 C7.60359323,8.27805477 8,8.95047139 8,9.50051502 L8,15.0086308 C8,15.5578743 7.6094126,15.7813801 7.12759863,15.5060579 L1.87240137,12.503088 C1.39640677,12.2310911 1,11.5586745 1,11.0086308 Z M16,11.0086308 C16,11.5586745 15.6035932,12.2310911 15.1275986,12.503088 L9.87240137,15.5060579 C9.3905874,15.7813801 9,15.5578743 9,15.0086308 L9,9.50051502 C9,8.95047139 9.39640677,8.27805477 9.87240137,8.00605786 L15.1275986,5.00308799 C15.6094126,4.72776572 16,4.95127159 16,5.50051502 L16,11.0086308 Z M9.34976149,6.98164278 C8.88045118,7.27044912 8.11286116,7.26633364 7.65023851,6.98164278 L2.84976149,4.02750307 C2.38045118,3.73869673 2.38713884,3.29611355 2.87661892,3.03254735 L7.62338108,0.476598498 C8.10752434,0.215905973 8.88713884,0.213032303 9.37661892,0.476598498 L14.1233811,3.03254735 C14.6075243,3.29323988 14.6128612,3.74281221 14.1502385,4.02750307 L9.34976149,6.98164278 Z\" id=\"path-1\"/>\n</symbol><symbol id=\"dash\" viewBox=\"0 0 16 16\">\n    <path fill-rule=\"evenodd\" d=\"M2 7h12a1 1 0 0 1 0 2H2a1 1 0 1 1 0-2z\"/>\n</symbol><symbol id=\"delete\" viewBox=\"0 0 16 16\">\n  <g fill-rule=\"evenodd\" transform=\"translate(-96 -32)\">\n    <path d=\"M100.5,33 L98.0068455,33 C97.4499488,33 97,33.4477153 97,34 L97,35 L111,35 L111,34 C111,33.4438648 110.54922,33 109.993155,33 L107.5,33 L107,32 L101,32 L100.5,33 Z M98,36 L110,36 L110,45.9914698 C110,47.1007504 109.09805,48 107.99147,48 L100.00853,48 C98.8992496,48 98,47.0980496 98,45.9914698 L98,36 Z\"/>\n    <path d=\"M100.5,33 L98.0068455,33 C97.4499488,33 97,33.4477153 97,34 L97,35 L111,35 L111,34 C111,33.4438648 110.54922,33 109.993155,33 L107.5,33 L107,32 L101,32 L100.5,33 Z M98,36 L110,36 L110,45.9914698 C110,47.1007504 109.09805,48 107.99147,48 L100.00853,48 C98.8992496,48 98,47.0980496 98,45.9914698 L98,36 Z\"/>\n  </g>\n</symbol><symbol id=\"destroy\" viewBox=\"0 0 16 16\">\n  <g fill-rule=\"evenodd\" transform=\"translate(-96 -32)\">\n    <path d=\"M100.5,33 L98.0068455,33 C97.4499488,33 97,33.4477153 97,34 L97,35 L111,35 L111,34 C111,33.4438648 110.54922,33 109.993155,33 L107.5,33 L107,32 L101,32 L100.5,33 Z M98,36 L110,36 L110,45.9914698 C110,47.1007504 109.09805,48 107.99147,48 L100.00853,48 C98.8992496,48 98,47.0980496 98,45.9914698 L98,36 Z\"/>\n    <path d=\"M100.5,33 L98.0068455,33 C97.4499488,33 97,33.4477153 97,34 L97,35 L111,35 L111,34 C111,33.4438648 110.54922,33 109.993155,33 L107.5,33 L107,32 L101,32 L100.5,33 Z M98,36 L110,36 L110,45.9914698 C110,47.1007504 109.09805,48 107.99147,48 L100.00853,48 C98.8992496,48 98,47.0980496 98,45.9914698 L98,36 Z\"/>\n  </g>\n</symbol><symbol id=\"display\" viewBox=\"0 0 16 16\">\n    \n    <g id=\"icons/16/icon-display\" stroke=\"none\" stroke-width=\"1\" fill=\"none\" fill-rule=\"evenodd\">\n        <mask id=\"mask-2\" fill=\"white\">\n            <use xlink:href=\"#path-1\"/>\n        </mask>\n        <use id=\"Fill-1\" xlink:href=\"#path-1\"/>\n    </g>\n</symbol><symbol id=\"dots\" viewBox=\"0 0 16 16\">\n  <path fill=\"#32363f\" fill-rule=\"evenodd\" d=\"M34,74 C35.1045695,74 36,73.1045695 36,72 C36,70.8954305 35.1045695,70 34,70 C32.8954305,70 32,70.8954305 32,72 C32,73.1045695 32.8954305,74 34,74 Z M46,74 C47.1045695,74 48,73.1045695 48,72 C48,70.8954305 47.1045695,70 46,70 C44.8954305,70 44,70.8954305 44,72 C44,73.1045695 44.8954305,74 46,74 Z M40,74 C41.1045695,74 42,73.1045695 42,72 C42,70.8954305 41.1045695,70 40,70 C38.8954305,70 38,70.8954305 38,72 C38,73.1045695 38.8954305,74 40,74 Z\" transform=\"translate(-32 -64)\"/>\n</symbol><symbol id=\"download\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M231,103.414214 L229.707107,104.707107 C229.316582,105.097631 228.683418,105.097631 228.292893,104.707107 C227.902369,104.316582 227.902369,103.683418 228.292893,103.292893 L231.292893,100.292893 C231.683418,99.9023689 232.316582,99.9023689 232.707107,100.292893 L235.707107,103.292893 C236.097631,103.683418 236.097631,104.316582 235.707107,104.707107 C235.316582,105.097631 234.683418,105.097631 234.292893,104.707107 L233,103.414214 L233,111 C233,111.552285 232.552285,112 232,112 C231.447715,112 231,111.552285 231,111 L231,103.414214 Z M225,99 L239,99 C239.552285,99 240,98.5522847 240,98 C240,97.4477153 239.552285,97 239,97 L225,97 C224.447715,97 224,97.4477153 224,98 C224,98.5522847 224.447715,99 225,99 Z\" transform=\"matrix(1 0 0 -1 -224 113)\"/>\n</symbol><symbol id=\"exchange\" viewBox=\"0 0 20 20\">\n<g id=\"Mask\">\n\t<path id=\"path-1_1_\" d=\"M4.3,12.5h9.5c0.7,0,1.2,0.6,1.2,1.2S14.4,15,13.8,15H4.3l1.6,1.6c0.5,0.5,0.5,1.3,0,1.8\n\t\tc-0.5,0.5-1.3,0.5-1.8,0l-3.8-3.8c-0.5-0.5-0.5-1.3,0-1.8l3.8-3.8c0.5-0.5,1.3-0.5,1.8,0s0.5,1.3,0,1.8L4.3,12.5z M15.7,7.5H6.2\n\t\tC5.6,7.5,5,6.9,5,6.2S5.6,5,6.2,5h9.5l-1.6-1.6c-0.5-0.5-0.5-1.3,0-1.8s1.3-0.5,1.8,0l3.8,3.8c0.5,0.5,0.5,1.3,0,1.8l-3.8,3.8\n\t\tc-0.5,0.5-1.3,0.5-1.8,0s-0.5-1.3,0-1.8L15.7,7.5z\"/>\n</g>\n</symbol><symbol id=\"eye\" viewBox=\"0 0 20 20\">\n  <path fill-rule=\"evenodd\" d=\"M21,10 C21,10 24,4 30,4 C36,4 39,10 39,10 C39,10 36,16 30,16 C24,16 21,10 21,10 Z M30,14 C32.2091391,14 34,12.2091391 34,10 C34,7.79086089 32.2091391,6 30,6 C27.7908609,6 26,7.79086089 26,10 C26,12.2091391 27.7908609,14 30,14 Z M30,12 C31.1045696,12 32,11.1045696 32,10 C32,8.89543045 31.1045696,8 30,8 C28.8954304,8 28,8.89543045 28,10 C28,11.1045696 28.8954304,12 30,12 Z\" transform=\"translate(-20)\"/>\n</symbol><symbol id=\"eye-closed\" viewBox=\"0 0 20 20\">\n  <g fill-rule=\"evenodd\" transform=\"translate(1 4)\">\n    <path d=\"M0,6 C0,6 3,-4.8985872e-16 9,0 C15,4.89858741e-16 18,6 18,6 C18,6 15,12 9,12 C3,12 0,6 0,6 Z M9,10 C11.2091391,10 13,8.20913911 13,6 C13,3.79086089 11.2091391,2 9,2 C6.79086089,2 5,3.79086089 5,6 C5,8.20913911 6.79086089,10 9,10 Z M9,8 C10.1045696,8 11,7.10456955 11,6 C11,4.89543045 10.1045696,4 9,4 C7.89543045,4 7,4.89543045 7,6 C7,7.10456955 7.89543045,8 9,8 Z\"/>\n    <path stroke=\"#FFFFFF\" stroke-width=\"4\" d=\"M2,13 L16,0\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>\n    <path transform=\"translate(-1 -4)\" d=\"M16.32,3.267c0.966,-0.832 2.311,0.514 1.36,1.466l-14,13c-0.992,0.854 -2.31,-0.516 -1.36,-1.466l14,-13Z\" style=\"fill-rule:nonzero;\"/>\n  </g>\n</symbol><symbol id=\"file-none\" viewBox=\"0 0 16 16\">\n  \n  <g fill-rule=\"evenodd\">\n    <use xlink:href=\"#file-none-a\"/>\n  </g>\n</symbol><symbol id=\"file\" viewBox=\"0 0 16 16\">\n  \n  <g fill-rule=\"evenodd\">\n    <use xlink:href=\"#file-a\"/>\n  </g>\n</symbol><symbol id=\"file-outline\" viewBox=\"0 0 16 16\">\n    <path fill-rule=\"evenodd\" d=\"M13 5h-3V2H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h8c.55 0 1-.45 1-1V5zm2-.999v11.003a1 1 0 0 1-1.007.996H2.007A1.001 1.001 0 0 1 1 14.999V1.001A.999.999 0 0 1 1.998 0H11l4 4.001z\"/>\n</symbol><symbol id=\"folder\" viewBox=\"0 0 16 16\">\n  <g fill-rule=\"evenodd\" transform=\"translate(-32 -32)\">\n    <path d=\"M32,34.0068455 C32,33.4507801 32.4509752,33 32.990778,33 L37.5089948,33 C37.7801695,33 38.1569366,33.1569366 38.3483734,33.3483734 L39.6516266,34.6516266 C39.8440279,34.8440279 40.2307968,35 40.5004358,35 L47.0029699,35 C47.5536144,35 48,35.455761 48,36.0024733 L48,44.9914698 C48,46.1007504 47.1054862,47 46.0059397,47 L33.9940603,47 C32.8927712,47 32,46.1029399 32,44.9941413 L32,34.0068455 Z M32,37 L48,37 L48,38 L32,38 L32,37 Z\"/>\n    <path d=\"M32,34.0068455 C32,33.4507801 32.4509752,33 32.990778,33 L37.5089948,33 C37.7801695,33 38.1569366,33.1569366 38.3483734,33.3483734 L39.6516266,34.6516266 C39.8440279,34.8440279 40.2307968,35 40.5004358,35 L47.0029699,35 C47.5536144,35 48,35.455761 48,36.0024733 L48,44.9914698 C48,46.1007504 47.1054862,47 46.0059397,47 L33.9940603,47 C32.8927712,47 32,46.1029399 32,44.9941413 L32,34.0068455 Z M32,37 L48,37 L48,38 L32,38 L32,37 Z\"/>\n  </g>\n</symbol><symbol id=\"forward\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M12.707,7.2929 L6.707,1.2929 C6.316,0.9019 5.684,0.9019 5.293,1.2929 C4.902,1.6839 4.902,2.3159 5.293,2.7069 L10.586,7.9999 L5.293,13.2929 C4.902,13.6839 4.902,14.3159 5.293,14.7069 C5.684,15.0979 6.316,15.0979 6.707,14.7069 L12.707,8.7069 C13.098,8.3159 13.098,7.6839 12.707,7.2929\"/>\n</symbol><symbol id=\"gear\" viewBox=\"0 0 16 16\">\n  <g fill-rule=\"evenodd\" transform=\"translate(-224 -32)\">\n    <path d=\"M238.249356,39.0782973 C238.301407,39.3371436 238.327432,39.6459602 238.327432,40.0037478 C238.327432,40.3615353 238.301407,40.6693526 238.249356,40.9291983 L239.869946,42.2624067 C240.000074,42.3483557 240.032105,42.4652862 239.968042,42.6141978 C239.642723,43.5646335 239.109199,44.4401137 238.36647,45.2416378 C238.262368,45.3655642 238.137246,45.3965458 237.995106,45.335582 L235.964113,44.6679784 C235.443602,45.0637434 234.884053,45.37256 234.284464,45.5944283 L233.875062,47.5932415 C233.849037,47.7401543 233.757948,47.8271027 233.601794,47.8520878 C233.041244,47.9520285 232.507721,48 232.000222,48 C231.492724,48 230.9582,47.9510291 230.398651,47.8520878 C230.242497,47.8281021 230.151408,47.7411537 230.125382,47.5932415 L229.715981,45.5944283 C229.077354,45.3605672 228.517805,45.0507511 228.036332,44.6679784 L226.005339,45.335582 C225.861197,45.3975452 225.738077,45.3655642 225.633974,45.2416378 C224.892246,44.4401137 224.358723,43.5646335 224.032403,42.6141978 C223.967339,42.4662856 224.000371,42.3483557 224.130499,42.2624067 L225.751089,40.9291983 C225.699038,40.6693526 225.673013,40.3625347 225.673013,40.0037478 C225.673013,39.6459602 225.699038,39.3371436 225.751089,39.0782973 L224.130499,37.7460883 C224.000371,37.6601393 223.967339,37.5422093 224.032403,37.3942971 C224.357722,36.4448609 224.891245,35.5683813 225.633974,34.7668572 C225.738077,34.6439302 225.862198,34.6129486 226.005339,34.6739124 L228.036332,35.3405166 C228.516804,34.9577438 229.077354,34.6499266 229.715981,34.4150661 L230.125382,32.4162528 C230.151408,32.2683407 230.242497,32.1823917 230.398651,32.1574065 C231.465698,31.9475312 232.533746,31.9475312 233.600793,32.1574065 C233.756947,32.1813923 233.848036,32.2683407 233.874061,32.4162528 L234.283463,34.4150661 C234.883052,34.6379337 235.442601,34.945751 235.963112,35.3405166 L237.994105,34.6739124 C238.137246,34.6119492 238.261367,34.6439302 238.36547,34.7668572 C239.107197,35.5693807 239.640721,36.4448609 239.967041,37.3942971 C240.031104,37.5422093 239.999073,37.6601393 239.868945,37.7460883 L238.249356,39.0782973 L238.249356,39.0782973 Z M232,36.5 C230.067125,36.5 228.5,38.067125 228.5,40 C228.5,41.932875 230.067125,43.5 232,43.5 C233.932875,43.5 235.5,41.932875 235.5,40 C235.5,38.067125 233.932875,36.5 232,36.5 L232,36.5 Z\"/>\n    <path d=\"M238.249356,39.0782973 C238.301407,39.3371436 238.327432,39.6459602 238.327432,40.0037478 C238.327432,40.3615353 238.301407,40.6693526 238.249356,40.9291983 L239.869946,42.2624067 C240.000074,42.3483557 240.032105,42.4652862 239.968042,42.6141978 C239.642723,43.5646335 239.109199,44.4401137 238.36647,45.2416378 C238.262368,45.3655642 238.137246,45.3965458 237.995106,45.335582 L235.964113,44.6679784 C235.443602,45.0637434 234.884053,45.37256 234.284464,45.5944283 L233.875062,47.5932415 C233.849037,47.7401543 233.757948,47.8271027 233.601794,47.8520878 C233.041244,47.9520285 232.507721,48 232.000222,48 C231.492724,48 230.9582,47.9510291 230.398651,47.8520878 C230.242497,47.8281021 230.151408,47.7411537 230.125382,47.5932415 L229.715981,45.5944283 C229.077354,45.3605672 228.517805,45.0507511 228.036332,44.6679784 L226.005339,45.335582 C225.861197,45.3975452 225.738077,45.3655642 225.633974,45.2416378 C224.892246,44.4401137 224.358723,43.5646335 224.032403,42.6141978 C223.967339,42.4662856 224.000371,42.3483557 224.130499,42.2624067 L225.751089,40.9291983 C225.699038,40.6693526 225.673013,40.3625347 225.673013,40.0037478 C225.673013,39.6459602 225.699038,39.3371436 225.751089,39.0782973 L224.130499,37.7460883 C224.000371,37.6601393 223.967339,37.5422093 224.032403,37.3942971 C224.357722,36.4448609 224.891245,35.5683813 225.633974,34.7668572 C225.738077,34.6439302 225.862198,34.6129486 226.005339,34.6739124 L228.036332,35.3405166 C228.516804,34.9577438 229.077354,34.6499266 229.715981,34.4150661 L230.125382,32.4162528 C230.151408,32.2683407 230.242497,32.1823917 230.398651,32.1574065 C231.465698,31.9475312 232.533746,31.9475312 233.600793,32.1574065 C233.756947,32.1813923 233.848036,32.2683407 233.874061,32.4162528 L234.283463,34.4150661 C234.883052,34.6379337 235.442601,34.945751 235.963112,35.3405166 L237.994105,34.6739124 C238.137246,34.6119492 238.261367,34.6439302 238.36547,34.7668572 C239.107197,35.5693807 239.640721,36.4448609 239.967041,37.3942971 C240.031104,37.5422093 239.999073,37.6601393 239.868945,37.7460883 L238.249356,39.0782973 L238.249356,39.0782973 Z M232,36.5 C230.067125,36.5 228.5,38.067125 228.5,40 C228.5,41.932875 230.067125,43.5 232,43.5 C233.932875,43.5 235.5,41.932875 235.5,40 C235.5,38.067125 233.932875,36.5 232,36.5 L232,36.5 Z\"/>\n  </g>\n</symbol><symbol id=\"help\"><use xlink:href=\"#a\" fill-rule=\"evenodd\"/></symbol><symbol id=\"hide\" viewBox=\"0 0 16 16\">\n    \n    <g id=\"icons/16/icon-hide\" stroke=\"none\" stroke-width=\"1\" fill=\"none\" fill-rule=\"evenodd\">\n        <mask id=\"mask-2\" fill=\"white\">\n            <use xlink:href=\"#path-1\"/>\n        </mask>\n        <use id=\"Fill-1\" xlink:href=\"#path-1\"/>\n    </g>\n</symbol><symbol id=\"hourglass\" viewBox=\"0 0 16 16\">\n  \n  <g fill-rule=\"evenodd\">\n    <use xlink:href=\"#hourglass-a\"/>\n  </g>\n</symbol><symbol id=\"info\" viewBox=\"0 0 16 16\"><use fill-rule=\"evenodd\" xlink:href=\"#info\"/></symbol><symbol id=\"image\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M65.0008717,65 C64.4481055,65 64,65.4499488 64,66.0068455 L64,77.9931545 C64,78.5492199 64.4446309,79 65.0008717,79 L78.9991283,79 C79.5518945,79 80,78.5500512 80,77.9931545 L80,66.0068455 C80,65.4507801 79.5553691,65 78.9991283,65 L65.0008717,65 Z M69,72 L71,74 L75,70 L78,73 L78,75.9906311 C78,76.5480902 77.544239,77 76.9975267,77 L67.0024733,77 C66.4488226,77 66,76.5561352 66,76 L66,75 L69,72 Z M69.5,70 C70.3284272,70 71,69.3284272 71,68.5 C71,67.6715728 70.3284272,67 69.5,67 C68.6715728,67 68,67.6715728 68,68.5 C68,69.3284272 68.6715728,70 69.5,70 Z\" transform=\"translate(-64 -64)\"/>\n</symbol><symbol id=\"lock\" viewBox=\"0 0 16 16\">\n  <g stroke=\"none\" stroke-width=\"1\" fill-rule=\"evenodd\">\n      <path d=\"M2,15.0046024 C2,15.5543453 2.45576096,16 3.00247329,16 L12.9975267,16 C13.5511774,16 14,15.5443356 14,15.0046024 L14,6.99539757 C14,6.44565467 13.5561352,6 13,6 L12,6 L12,4 C12,1.794 10.2053333,0 8,0 C5.794,0 4,1.794 4,4 L4,6 L3,6 C2.44771525,6 2,6.4556644 2,6.99539757 L2,15.0046024 Z M6,4.5 C6,3.1215 6.8968,2 8,2 C9.1028,2 10,3.1215 10,4.5 L10,6 L6,6 L6,4.5 Z M8,8.5 C8.8265,8.5 9.5,9.172 9.5,10 C9.5,10.552 9.1955,11.032 8.75,11.29 L8.75,13.75 C8.75,14.1625 8.4125,14.5 8,14.5 C7.586,14.5 7.25,14.1625 7.25,13.75 L7.25,11.29 C6.803,11.032 6.5,10.552 6.5,10 C6.5,9.172 7.172,8.5 8,8.5 Z\"/>\n  </g>\n</symbol><symbol id=\"moveto\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M295.5,102.914214 L294.207107,104.207107 C293.816582,104.597631 293.183418,104.597631 292.792893,104.207107 C292.402369,103.816582 292.402369,103.183418 292.792893,102.792893 L295.792893,99.7928932 C296.183418,99.4023689 296.816582,99.4023689 297.207107,99.7928932 L300.207107,102.792893 C300.597631,103.183418 300.597631,103.816582 300.207107,104.207107 C299.816582,104.597631 299.183418,104.597631 298.792893,104.207107 L297.5,102.914214 L297.5,110.5 C297.5,111.052285 297.052285,111.5 296.5,111.5 C295.947715,111.5 295.5,111.052285 295.5,110.5 L295.5,102.914214 Z M289.5,98.5 L303.5,98.5 C304.052285,98.5 304.5,98.0522847 304.5,97.5 C304.5,96.9477153 304.052285,96.5 303.5,96.5 L289.5,96.5 C288.947715,96.5 288.5,96.9477153 288.5,97.5 C288.5,98.0522847 288.947715,98.5 289.5,98.5 Z\" transform=\"rotate(90 200.5 -88)\"/>\n</symbol><symbol id=\"next\" viewBox=\"0 0 16 16\">\n    <g stroke-width=\"1\" fill-rule=\"evenodd\">\n        <path d=\"M3.41421356,7 L14.9931545,7 C15.5492199,7 16,7.44386482 16,8 C16,8.55228475 15.5500512,9 14.9931545,9 L3.41421356,9 L8.70710678,14.2928932 C9.09763107,14.6834175 9.09763107,15.3165825 8.70710678,15.7071068 C8.31658249,16.0976311 7.68341751,16.0976311 7.29289322,15.7071068 L0.292893219,8.70710678 C-0.0976310729,8.31658249 -0.0976310729,7.68341751 0.292893219,7.29289322 L7.29289322,0.292893219 C7.68341751,-0.0976310729 8.31658249,-0.0976310729 8.70710678,0.292893219 C9.09763107,0.683417511 9.09763107,1.31658249 8.70710678,1.70710678 L3.41421356,7 Z\" transform=\"translate(8.000000, 8.000000) scale(-1, 1) translate(-8.000000, -8.000000) \"/>\n    </g>\n</symbol><symbol id=\"openwith\" viewBox=\"0 0 16 16\">\n  <g fill-rule=\"evenodd\" transform=\"translate(-128 -160)\">\n    <path d=\"M137,160 L137,162 L140.5,162 L134,168.5 L135.5,170 L142,163.5 L142,167 L144,167 L144,161.002929 C144,160.449027 143.562119,160 142.997071,160 L137,160 Z M135,162 L135,160 L129.002929,160 C128.449027,160 128,160.444631 128,161.000872 L128,174.999128 C128,175.551894 128.444631,176 129.000872,176 L142.999128,176 C143.551894,176 144,175.562119 144,174.997071 L144,169 L142,169 L142,174 L130,174 L130,162 L135,162 Z\"/>\n  </g>\n</symbol><symbol id=\"paperplane\" viewBox=\"0 0 16 16\">\n  <g fill-rule=\"evenodd\" transform=\"translate(-256 -64)\">\n    <polygon points=\"272 64 266 79 263.5 76.5 260 79 259 75 269 66.5 259 72.5 256 70\"/>\n  </g>\n</symbol><symbol id=\"pen\" viewBox=\"0 0 16 16\">\n  \n  <use fill-rule=\"evenodd\" xlink:href=\"#pen\"/>\n</symbol><symbol id=\"people\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M136,73 C138.209139,73 140,70.9852814 140,68.5 C140,66.0147186 138.209139,64 136,64 C133.790861,64 132,66.0147186 132,68.5 C132,70.9852814 133.790861,73 136,73 Z M128,78 C128,77 130,74 132,74 C134,74 133,75 136,75 C139,75 138,74 140,74 C142,74 144,77 144,78 C144,79 144,80 143,80 L129,80 C128,80 128,79 128,78 Z\" transform=\"translate(-128 -64)\"/>\n</symbol><symbol id=\"phone-download\" viewBox=\"0 0 16 16\">\n  <g transform=\"translate(-64 -160)\">\n    <path d=\"M71,168.585786 L71,164 C71,163.447715 71.4477153,163 72,163 C72.5522847,163 73,163.447715 73,164 L73,168.585786 L73.2928932,168.292893 C73.6834175,167.902369 74.3165825,167.902369 74.7071068,168.292893 C75.0976311,168.683418 75.0976311,169.316582 74.7071068,169.707107 L72.7071068,171.707107 C72.3165825,172.097631 71.6834175,172.097631 71.2928932,171.707107 L69.2928932,169.707107 C68.9023689,169.316582 68.9023689,168.683418 69.2928932,168.292893 C69.6834175,167.902369 70.3165825,167.902369 70.7071068,168.292893 L71,168.585786 Z M66,161.000872 C66,160.448106 66.455761,160 67.0024733,160 L76.9975267,160 C77.5511774,160 78,160.444631 78,161.000872 L78,174.999128 C78,175.551894 77.544239,176 76.9975267,176 L67.0024733,176 C66.4488226,176 66,175.555369 66,174.999128 L66,161.000872 Z M68,162 L68,173 L76,173 L76,162 L68,162 Z\"/>\n  </g>\n</symbol><symbol id=\"plus\" viewBox=\"0 0 16 16\">\n  \n  <g fill-rule=\"evenodd\">\n    <use xlink:href=\"#plus-a\"/>\n  </g>\n</symbol><symbol id=\"plus-small\" viewBox=\"0 0 12 12\">\n    \n    <use fill-rule=\"evenodd\" transform=\"translate(1 1)\" xlink:href=\"#plus-small\"/>\n</symbol><symbol id=\"previous\" viewBox=\"0 0 16 16\">\n    <g stroke-width=\"1\" fill-rule=\"evenodd\">\n        <path d=\"M3.41421356,7 L14.9931545,7 C15.5492199,7 16,7.44386482 16,8 C16,8.55228475 15.5500512,9 14.9931545,9 L3.41421356,9 L8.70710678,14.2928932 C9.09763107,14.6834175 9.09763107,15.3165825 8.70710678,15.7071068 C8.31658249,16.0976311 7.68341751,16.0976311 7.29289322,15.7071068 L0.292893219,8.70710678 C-0.0976310729,8.31658249 -0.0976310729,7.68341751 0.292893219,7.29289322 L7.29289322,0.292893219 C7.68341751,-0.0976310729 8.31658249,-0.0976310729 8.70710678,0.292893219 C9.09763107,0.683417511 9.09763107,1.31658249 8.70710678,1.70710678 L3.41421356,7 Z\"/>\n    </g>\n</symbol><symbol id=\"rename\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M201.5,99.5 L192,109.025391 L192,112 L195.03772,112 L204.5,102.5 L201.5,99.5 Z M206.912154,96.9121541 C206.132243,96.1322429 204.869144,96.1308556 204.089264,96.9107361 L203,98 L206.030762,101 L207.092271,99.9252663 C207.869738,99.1381134 207.863777,97.8637772 207.087846,97.0878459 L206.912154,96.9121541 Z M199,110 L204.997071,110 C205.550973,110 206,110.443865 206,111 C206,111.552285 205.553689,112 205.002455,112 L197,112 L199,110 Z\" transform=\"translate(-192 -96)\"/>\n</symbol><symbol id=\"restore\" viewBox=\"0 0 16 16\">\n  <g fill-rule=\"evenodd\" transform=\"translate(1 2)\">\n    <path d=\"M-1.33226763e-14,13 L6.02479339,13 L8,13 C12.0522847,13 15,10.0522847 15,6 C15,1.94771525 12.0522847,-1 8,-1 C3.94771525,-1 1,1.94771525 1,6 C1,6.55228475 1.44771525,7 2,7 C2.55228475,7 3,6.55228475 3,6 C3,3.05228475 5.05228475,1 8,1 C10.9477153,1 13,3.05228475 13,6 C13,8.94771525 10.9477153,11 8,11 L-1.57651669e-14,11 C-0.55228475,11 -1,11.4477153 -1,12 C-1,12.5522847 -0.55228475,13 -1.33226763e-14,13 Z\"/>\n    <path d=\"M0.832050294,2.4452998 C0.525697835,1.98577112 -0.0951715076,1.86159725 -0.554700196,2.16794971 C-1.01422888,2.47430216 -1.13840275,3.09517151 -0.832050294,3.5547002 L1.16794971,6.5547002 C1.47430216,7.01422888 2.09517151,7.13840275 2.5547002,6.83205029 L5.5547002,4.83205029 C6.01422888,4.52569784 6.13840275,3.90482849 5.83205029,3.4452998 C5.52569784,2.98577112 4.90482849,2.86159725 4.4452998,3.16794971 L2.2773501,4.61324951 L0.832050294,2.4452998 Z\"/>\n  </g>\n</symbol><symbol id=\"share\" viewBox=\"0 0 16 16\">\n  <g fill-rule=\"evenodd\" transform=\"translate(-160 -32)\">\n    <path d=\"M165.082611,42.1593397 C164.543049,42.6798471 163.808912,43 163,43 C161.343146,43 160,41.6568542 160,40 C160,38.3431458 161.343146,37 163,37 C163.808912,37 164.543049,37.3201529 165.082611,37.8406603 L170.022669,35.3706317 C170.007705,35.2491857 170,35.1254927 170,35 C170,33.3431458 171.343146,32 173,32 C174.656854,32 176,33.3431458 176,35 C176,36.6568542 174.656854,38 173,38 C172.191088,38 171.456951,37.6798471 170.917389,37.1593397 L165.977331,39.6293683 C165.992295,39.7508143 166,39.8745073 166,40 C166,40.1254927 165.992295,40.2491857 165.977331,40.3706317 L170.917389,42.8406603 C171.456951,42.3201529 172.191088,42 173,42 C174.656854,42 176,43.3431458 176,45 C176,46.6568542 174.656854,48 173,48 C171.343146,48 170,46.6568542 170,45 C170,44.8745073 170.007705,44.7508143 170.022669,44.6293683 L165.082611,42.1593397 Z\"/>\n    <path d=\"M165.082611,42.1593397 C164.543049,42.6798471 163.808912,43 163,43 C161.343146,43 160,41.6568542 160,40 C160,38.3431458 161.343146,37 163,37 C163.808912,37 164.543049,37.3201529 165.082611,37.8406603 L170.022669,35.3706317 C170.007705,35.2491857 170,35.1254927 170,35 C170,33.3431458 171.343146,32 173,32 C174.656854,32 176,33.3431458 176,35 C176,36.6568542 174.656854,38 173,38 C172.191088,38 171.456951,37.6798471 170.917389,37.1593397 L165.977331,39.6293683 C165.992295,39.7508143 166,39.8745073 166,40 C166,40.1254927 165.992295,40.2491857 165.977331,40.3706317 L170.917389,42.8406603 C171.456951,42.3201529 172.191088,42 173,42 C174.656854,42 176,43.3431458 176,45 C176,46.6568542 174.656854,48 173,48 C171.343146,48 170,46.6568542 170,45 C170,44.8745073 170.007705,44.7508143 170.022669,44.6293683 L165.082611,42.1593397 Z\"/>\n  </g>\n</symbol><symbol id=\"small-arrow\" viewBox=\"0 0 12 12\">\n    <path d=\"M1.70710678,3.29289322 C1.31658249,2.90236893 0.683417511,2.90236893 0.292893219,3.29289322 C-0.0976310729,3.68341751 -0.0976310729,4.31658249 0.292893219,4.70710678 L5.29289322,9.70710678 C5.68341751,10.0976311 6.31658249,10.0976311 6.70710678,9.70710678 L11.7071068,4.70710678 C12.0976311,4.31658249 12.0976311,3.68341751 11.7071068,3.29289322 C11.3165825,2.90236893 10.6834175,2.90236893 10.2928932,3.29289322 L6,7.58578644 L1.70710678,3.29289322 Z\"/>\n</symbol><symbol id=\"spinner\" viewBox=\"0 0 32 32\">\n  <path opacity=\".25\" d=\"M16 0a16 16 0 0 0 0 32 16 16 0 0 0 0-32m0 4a12 12 0 0 1 0 24 12 12 0 0 1 0-24\"/>\n  <path d=\"M16 0a16 16 0 0 1 16 16h-4a12 12 0 0 0-12-12z\"/>\n</symbol><symbol id=\"sync\" viewBox=\"0 0 16 16\"><path fill-rule=\"evenodd\" d=\"M16 7.2V3c0-.6-.4-1-1-1-.5 0-.8.3-.9.7A8.09 8.09 0 0 0 8 0C4.9 0 2 1.8.7 4.6c-.2.5 0 1.1.5 1.3.5.2 1.1 0 1.3-.5C3.5 3.4 5.6 2 8 2c1.5 0 3 .6 4 1.5-.3 0-.6.1-.8.3-.4.4-.3 1.1.1 1.4l3 2.5h.1c.1.1.2.1.3.1h.4c.1 0 .2-.1.3-.1h.1c.1-.1.2-.1.2-.2.2 0 .2-.1.3-.3 0 .1 0 0 0 0m-1.2 2.9c-.5-.2-1.1 0-1.3.5A6 6 0 0 1 8 14c-1.5 0-2.9-.6-4-1.5.3 0 .5-.1.7-.4.4-.4.3-1.1-.1-1.4l-3-2.5h-.1L1.3 8h-.1c-.2 0-.5 0-.7.1H.4c-.1.1-.1.2-.2.3-.1.1-.1.2-.2.3V13c0 .6.4 1 1 1 .5 0 .9-.3 1-.8C3.5 14.9 5.6 16 8 16c3.1 0 5.9-1.8 7.3-4.5.2-.5 0-1.1-.5-1.4\"/></symbol><symbol id=\"team\" viewBox=\"0 0 16 16\">\n    <path fill-rule=\"evenodd\" d=\"M11.145 7.75C10.263 7.285 9.647 6.23 9.647 5c0-1.657 1.12-3 2.5-3 1.381 0 2.5 1.343 2.5 3 0 1.231-.618 2.29-1.502 2.752V9l1.105.553c.49.245 1.095.848 1.342 1.342l.106.21c.245.49 0 .895-.55.895H9.142c-.544 0-.797-.4-.55-.895l.106-.21c.245-.49.848-1.095 1.342-1.342L11.145 9V7.75zM4.647 10.8c-1.165-.48-2-1.776-2-3.3 0-1.933 1.343-3.5 3-3.5s3 1.567 3 3.5c0 1.524-.835 2.82-2 3.3V12l2.051.684c.532.177 1.15.717 1.397 1.21l.105.211c.245.49.002.895-.548.895h-8.01c-.539 0-.794-.4-.547-.895l.105-.21c.245-.49.872-1.037 1.397-1.211L4.647 12v-1.2z\"/>\n</symbol><symbol id=\"top-select\" viewBox=\"0 0 24 24\">\n  <g fill=\"#95999d\" fill-rule=\"evenodd\" transform=\"translate(12.285714, 12.000000) rotate(270.000000) translate(-12.285714, -12.000000)\">\n    <path d=\"M6.46026077,20.3174036 C5.84657974,20.9310847 5.84657974,21.9260582 6.46026077,22.5397392 C7.0739418,23.1534203 8.06891534,23.1534203 8.68259637,22.5397392 L18.1111678,13.1111678 C18.7248488,12.4974868 18.7248488,11.5025132 18.1111678,10.8888322 L8.68259637,1.46026077 C8.06891534,0.846579743 7.0739418,0.846579743 6.46026077,1.46026077 C5.84657974,2.0739418 5.84657974,3.06891534 6.46026077,3.68259637 L14.7776644,12 L6.46026077,20.3174036 Z\"/>\n  </g>\n</symbol><symbol id=\"top\" viewBox=\"0 0 24 24\">\n  <g fill-rule=\"evenodd\" transform=\"translate(12.285714, 12.000000) rotate(270.000000) translate(-12.285714, -12.000000)\">\n    <path d=\"M6.46026077,20.3174036 C5.84657974,20.9310847 5.84657974,21.9260582 6.46026077,22.5397392 C7.0739418,23.1534203 8.06891534,23.1534203 8.68259637,22.5397392 L18.1111678,13.1111678 C18.7248488,12.4974868 18.7248488,11.5025132 18.1111678,10.8888322 L8.68259637,1.46026077 C8.06891534,0.846579743 7.0739418,0.846579743 6.46026077,1.46026077 C5.84657974,2.0739418 5.84657974,3.06891534 6.46026077,3.68259637 L14.7776644,12 L6.46026077,20.3174036 Z\"/>\n  </g>\n</symbol><symbol id=\"trash\" viewBox=\"0 0 16 16\">\n  <g fill-rule=\"evenodd\" transform=\"translate(-96 -32)\">\n    <path d=\"M100.5,33 L98.0068455,33 C97.4499488,33 97,33.4477153 97,34 L97,35 L111,35 L111,34 C111,33.4438648 110.54922,33 109.993155,33 L107.5,33 L107,32 L101,32 L100.5,33 Z M98,36 L110,36 L110,45.9914698 C110,47.1007504 109.09805,48 107.99147,48 L100.00853,48 C98.8992496,48 98,47.0980496 98,45.9914698 L98,36 Z\"/>\n    <path d=\"M100.5,33 L98.0068455,33 C97.4499488,33 97,33.4477153 97,34 L97,35 L111,35 L111,34 C111,33.4438648 110.54922,33 109.993155,33 L107.5,33 L107,32 L101,32 L100.5,33 Z M98,36 L110,36 L110,45.9914698 C110,47.1007504 109.09805,48 107.99147,48 L100.00853,48 C98.8992496,48 98,47.0980496 98,45.9914698 L98,36 Z\"/>\n  </g>\n</symbol><symbol id=\"upload\" viewBox=\"0 0 16 16\">\n  <path fill-rule=\"evenodd\" d=\"M263,102.414214 L261.707107,103.707107 C261.316582,104.097631 260.683418,104.097631 260.292893,103.707107 C259.902369,103.316582 259.902369,102.683418 260.292893,102.292893 L263.292893,99.2928932 C263.683418,98.9023689 264.316582,98.9023689 264.707107,99.2928932 L267.707107,102.292893 C268.097631,102.683418 268.097631,103.316582 267.707107,103.707107 C267.316582,104.097631 266.683418,104.097631 266.292893,103.707107 L265,102.414214 L265,110 C265,110.552285 264.552285,111 264,111 C263.447715,111 263,110.552285 263,110 L263,102.414214 Z M257,98 L271,98 C271.552285,98 272,97.5522847 272,97 C272,96.4477153 271.552285,96 271,96 L257,96 C256.447715,96 256,96.4477153 256,97 C256,97.5522847 256.447715,98 257,98 Z\" transform=\"translate(-256 -96)\"/>\n</symbol><symbol id=\"warn\" viewBox=\"0 0 48 48\"><path fill-rule=\"evenodd\" d=\"M24,48 C37.254834,48 48,37.254834 48,24 C48,10.745166 37.254834,0 24,0 C10.745166,0 0,10.745166 0,24 C0,37.254834 10.745166,48 24,48 Z M22.4965402,13.1030164 C23.3271937,11.6654101 24.6721035,11.6623183 25.5044703,13.1030164 L35.4961011,30.3969836 C36.3266815,31.8345899 35.6568766,33 33.9920699,33 L14.0079301,33 C12.3466962,33 11.6715912,31.8376817 12.5040311,30.3969836 L22.4965402,13.1030164 Z M22.5792265,18.4260768 C22.5354709,17.6384763 23.1362228,17 23.9297104,17 L24.0702896,17 C24.8598969,17 25.464841,17.6328625 25.4207735,18.4260768 L25.0554191,25.0024554 C25.024812,25.553384 24.5561352,26 24,26 C23.4477153,26 22.9752049,25.5536886 22.9445809,25.0024554 L22.5792265,18.4260768 Z M22.5,29 C22.5,28.1715729 23.1657972,27.5 24,27.5 C24.8284271,27.5 25.5,28.1657972 25.5,29 C25.5,29.8284271 24.8342028,30.5 24,30.5 C23.1715729,30.5 22.5,29.8342028 22.5,29 Z\"/></symbol><symbol id=\"warning\" viewBox=\"0 0 16 16\">\n  <g fill=\"none\" fill-rule=\"evenodd\" transform=\"translate(-288 -128)\">\n    <path fill=\"#F52D2D\" d=\"M295.021699,129.735659 C295.564898,128.777255 296.450192,128.78566 296.988422,129.735659 L303.52045,141.26497 C304.063442,142.223374 303.613566,143.000315 302.503518,143.000315 L289.50373,143.000315 C288.399102,143.000315 287.948739,142.214969 288.487174,141.26497 L295.021699,129.735659 Z M295.003624,141.000315 C295.003624,140.44803 295.447489,140.000315 296.003624,140.000315 C296.555909,140.000315 297.003624,140.444179 297.003624,141.000315 C297.003624,141.552599 296.559759,142.000315 296.003624,142.000315 C295.45134,142.000315 295.003624,141.55645 295.003624,141.000315 Z M295.003624,133.003244 C295.003624,132.449341 295.447489,132.000315 296.003624,132.000315 C296.555909,132.000315 297.003624,132.438196 297.003624,133.003244 L297.003624,137.997385 C297.003624,138.551288 296.559759,139.000315 296.003624,139.000315 C295.45134,139.000315 295.003624,138.562433 295.003624,137.997385 L295.003624,133.003244 Z\"/>\n  </g>\n</symbol><symbol id=\"cloud-broken\" viewBox=\"0 0 160 160\"><g fill=\"none\" fill-rule=\"evenodd\"><path fill=\"#93BEF8\" d=\"M61.763 130.593l-3.174 7.933h59.045-.003c23.356 0 42.369-19.126 42.369-42.634 0-22.218-16.977-40.52-38.56-42.467a42.494 42.494 0 0 0-12.426-25.27 42.873 42.873 0 0 0-4.68-3.992l-3.156 7.892c7.203 6.153 11.888 15.26 12.12 25.41.055 2.478 2.056 4.446 4.499 4.446h.34c18.71 0 33.93 15.405 33.93 34.338 0 18.936-15.22 34.34-33.93 34.34h-.324l-.01.004h-56.04zm39.415-106.538l3.157-7.892C97.128 10.86 88.462 8 79.387 8 68.245 8 57.724 12.311 49.76 20.158c-6.974 6.868-11.308 15.77-12.438 25.4-9.568 1.135-18.411 5.5-25.239 12.514C4.29 66.086 0 76.677 0 87.89c0 23.511 19 42.637 42.366 42.637H58.59l3.174-7.933H42.537c-.097-.007-.194-.007-.292-.007l-.107.007h-.275c-18.71 0-33.93-15.405-33.93-34.341 0-18.507 14.863-33.905 33.132-34.331 2.406-.056 4.343-2.017 4.398-4.45.419-18.494 15.638-33.538 33.92-33.538 8.248 0 15.873 3.062 21.795 8.122z\"/><path stroke=\"#297EF1\" stroke-linecap=\"round\" stroke-width=\"8\" d=\"M50 156L110 4\"/></g></symbol><symbol id=\"file-type-audio\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\" transform=\"translate(1 1)\"><rect width=\"30\" height=\"30\" fill=\"#ACF6F7\" rx=\"2\"/><path fill=\"#0CCBD0\" d=\"M8 19.998c-1.105 0-2 .888-2 2 0 1.105.898 2 1.998 2H9c1.657 0 3-1.35 3-2.997v-7.679a.63.63 0 0 1 .492-.601l6.016-1.129c.272-.05.492.124.492.418v5.478c0 .282-.215.51-.49.51H17c-1.105 0-2 .904-2 1.997v-.179a2 2 0 0 0 1.998 1.997H18c1.657 0 3-1.349 3-2.993V7c0-.554-.445-.921-.976-.825L10.976 7.82C10.437 7.918 10 8.454 10 9v10.498c0 .276-.215.5-.49.5H8z\"/></g></symbol><symbol id=\"file-type-bin\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\"><path fill=\"#D1D5DB\" d=\"M3 2.002C3 .896 3.89 0 4.997 0H22l7 7v22.996A2 2 0 0 1 27.003 32H4.997A1.995 1.995 0 0 1 3 29.998V2.002z\"/><path fill=\"#A3ACB8\" d=\"M21.5 0c-.276 0-.5.23-.5.5V8h7.5c.276 0 .5-.232.5-.5V7l-7-7h-.5z\"/><path fill=\"#4F5B69\" d=\"M7 15.568c0-.597.06-1.12.178-1.568.118-.449.285-.82.5-1.115.215-.295.473-.516.772-.664.3-.147.633-.221 1.001-.221.786 0 1.391.29 1.815.87.424.58.636 1.479.636 2.698 0 .602-.059 1.128-.177 1.577-.119.449-.286.822-.501 1.12-.215.298-.474.521-.776.669a2.265 2.265 0 0 1-1.006.22c-.792 0-1.397-.306-1.815-.918C7.209 17.623 7 16.734 7 15.568zm3.705 0a9.152 9.152 0 0 0-.019-.58l-2.292 2.191c.193.597.546.895 1.057.895.4 0 .708-.2.926-.6.219-.4.328-1.035.328-1.906zm-2.507 0a7.965 7.965 0 0 0 .018.55l2.283-2.192c-.187-.563-.54-.845-1.057-.845-.4 0-.707.202-.922.605-.215.402-.322 1.03-.322 1.882zm5.35 0c0-.597.06-1.12.179-1.568.118-.449.285-.82.5-1.115.215-.295.473-.516.772-.664.3-.147.633-.221 1.001-.221.786 0 1.39.29 1.815.87.424.58.636 1.479.636 2.698 0 .602-.06 1.128-.178 1.577-.118.449-.285.822-.5 1.12-.215.298-.474.521-.777.669a2.265 2.265 0 0 1-1.005.22c-.792 0-1.397-.306-1.815-.918-.418-.613-.627-1.502-.627-2.668zm3.706 0a9.153 9.153 0 0 0-.02-.58l-2.291 2.191c.193.597.546.895 1.057.895.4 0 .708-.2.926-.6.218-.4.328-1.035.328-1.906zm-2.508 0a7.965 7.965 0 0 0 .02.55l2.282-2.192c-.187-.563-.54-.845-1.057-.845-.4 0-.707.202-.922.605-.215.402-.323 1.03-.323 1.882zm5.988 2.368h1.431v-4.295l-1.235.993-.561-.786 2.133-1.71h.823v5.798h1.404v1.081h-3.995v-1.08zM7 24.413c0-.596.06-1.119.178-1.568.118-.449.285-.82.5-1.115.215-.295.473-.516.772-.664.3-.147.633-.22 1.001-.22.786 0 1.391.29 1.815.869.424.58.636 1.48.636 2.698 0 .603-.059 1.128-.177 1.577-.119.449-.286.822-.501 1.12-.215.299-.474.521-.776.669A2.265 2.265 0 0 1 9.442 28c-.792 0-1.397-.306-1.815-.919C7.209 26.468 7 25.58 7 24.413zm3.705 0a9.152 9.152 0 0 0-.019-.58l-2.292 2.192c.193.596.546.894 1.057.894.4 0 .708-.2.926-.6.219-.4.328-1.035.328-1.906zm-2.507 0a7.965 7.965 0 0 0 .018.55l2.283-2.192c-.187-.563-.54-.845-1.057-.845-.4 0-.707.202-.922.605-.215.403-.322 1.03-.322 1.882zm5.987 2.368h1.431v-4.295l-1.235.993-.56-.786 2.132-1.71h.824v5.798h1.403v1.081h-3.995v-1.08zm5.913-2.368c0-.596.059-1.119.177-1.568.119-.449.286-.82.501-1.115.215-.295.472-.516.772-.664.3-.147.633-.22 1-.22.787 0 1.392.29 1.816.869.424.58.636 1.48.636 2.698 0 .603-.06 1.128-.178 1.577-.118.449-.285.822-.5 1.12-.215.299-.474.521-.777.669A2.265 2.265 0 0 1 22.54 28c-.793 0-1.398-.306-1.815-.919-.418-.613-.627-1.502-.627-2.668zm3.704 0a9.152 9.152 0 0 0-.018-.58l-2.292 2.192c.193.596.545.894 1.057.894.399 0 .708-.2.926-.6.218-.4.327-1.035.327-1.906zm-2.507 0a7.965 7.965 0 0 0 .019.55l2.283-2.192c-.187-.563-.54-.845-1.057-.845-.4 0-.707.202-.922.605-.215.403-.323 1.03-.323 1.882z\"/></g></symbol><symbol id=\"file-type-code\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\"><path fill=\"#E6D5FF\" d=\"M3 2.002C3 .896 3.89 0 4.997 0H22l7 7v22.996A2 2 0 0 1 27.003 32H4.997A1.995 1.995 0 0 1 3 29.998V2.002z\"/><path fill=\"#9C59FF\" d=\"M21.5 0c-.276 0-.5.23-.5.5V8h7.5c.276 0 .5-.232.5-.5V7l-7-7h-.5z\"/><g stroke=\"#9C59FF\" stroke-width=\"2\"><path stroke-linejoin=\"round\" d=\"M12 22l-4-4 4-4M20 22l4-4-4-4\"/><path d=\"M14 25l4-14\"/></g></g></symbol><symbol id=\"file-type-files\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\"><path fill=\"#D1D5DB\" d=\"M3 2.002C3 .896 3.89 0 4.997 0H22l7 7v22.996A2 2 0 0 1 27.003 32H4.997A1.995 1.995 0 0 1 3 29.998V2.002z\"/><path fill=\"#A3ACB8\" d=\"M21.5 0c-.276 0-.5.23-.5.5V8h7.5c.276 0 .5-.232.5-.5V7l-7-7h-.5z\"/></g></symbol><symbol id=\"file-type-folder\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\" transform=\"translate(0 2)\"><rect width=\"32\" height=\"26\" y=\"2\" fill=\"#B2D3FF\" rx=\"2\"/><path fill=\"#197BFF\" d=\"M0 .99C0 .445.45 0 1.007 0h11.986c.556 0 1.32.313 1.718.71l.578.58c.393.392 1.156.71 1.712.71h13.005C31.107 2 32 2.895 32 4H17c-.552 0-1.313.313-1.71.71l-.58.58c-.392.392-1.16.71-1.717.71H1.007A1.004 1.004 0 0 1 0 5.01V.99z\"/></g></symbol><symbol id=\"file-type-image\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\" transform=\"translate(0 3)\"><rect width=\"32\" height=\"26\" fill=\"#8EE39B\" rx=\"2\"/><path fill=\"#1EC737\" d=\"M0 20l6.29-6.29a.999.999 0 0 1 1.416-.004L11 17l8.294-8.294a1.003 1.003 0 0 1 1.412 0L32 20v4.002C32 25.106 31.11 26 29.998 26H2.002A2.002 2.002 0 0 1 0 24.002V20z\"/><circle cx=\"8\" cy=\"7\" r=\"3\" fill=\"#FFF\"/><path stroke=\"#8EE39B\" d=\"M11 16l-5.5 5.5L11 16z\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></g></symbol><symbol id=\"file-type-pdf\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\"><path fill=\"#FCD0D5\" d=\"M3 2.002C3 .896 3.89 0 4.997 0H22l7 7v22.996A2 2 0 0 1 27.003 32H4.997A1.995 1.995 0 0 1 3 29.998V2.002z\"/><path fill=\"#F1132D\" d=\"M21.5 0c-.276 0-.5.23-.5.5V8h7.5c.276 0 .5-.232.5-.5V7l-7-7h-.5zM9 11h14v2H9v-2zm0 4h12v2H9v-2zm.066 4.784h1.904c.283 0 .548.028.796.084.248.056.464.15.648.28.184.13.33.304.436.52.107.216.16.481.16.796 0 .304-.055.568-.164.792-.11.224-.257.408-.444.552a1.89 1.89 0 0 1-.648.32 2.87 2.87 0 0 1-.784.104h-.728V25H9.066v-5.216zm1.832 2.512c.64 0 .96-.277.96-.832 0-.272-.081-.464-.244-.576-.163-.112-.401-.168-.716-.168h-.656v1.576h.656zm3.016-2.512h1.472c.4 0 .76.05 1.08.152.32.101.595.257.824.468.23.21.405.479.528.804.123.325.184.712.184 1.16 0 .448-.061.837-.184 1.168-.123.33-.296.604-.52.82a2.137 2.137 0 0 1-.804.484c-.312.107-.66.16-1.044.16h-1.536v-5.216zm1.4 4.264c.224 0 .427-.03.608-.088.181-.059.336-.153.464-.284.128-.13.228-.303.3-.516.072-.213.108-.477.108-.792 0-.31-.036-.57-.108-.78a1.263 1.263 0 0 0-.3-.504 1.092 1.092 0 0 0-.464-.268 2.152 2.152 0 0 0-.608-.08h-.224v3.312h.224zm3.68-4.264h3.288v.992H20.17v1.208h1.808v.992H20.17V25h-1.176v-5.216z\"/></g></symbol><symbol id=\"file-type-sheet\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\"><path fill=\"#9FE6A2\" d=\"M3 2.002C3 .896 3.89 0 4.997 0H22l7 7v22.996A2 2 0 0 1 27.003 32H4.997A1.995 1.995 0 0 1 3 29.998V2.002z\"/><path fill=\"#0FC016\" d=\"M21.5 0c-.276 0-.5.23-.5.5V8h7.5c.276 0 .5-.232.5-.5V7l-7-7h-.5zM8 9h4v2H8V9zm0-4h4v2H8V5zm0 8h4v2H8v-2zm0 4h4v2H8v-2zm0 4h4v2H8v-2zm0 4h4v2H8v-2zm6-16h4v2h-4V9zm0-4h4v2h-4V5zm0 8h4v2h-4v-2zm0 4h4v2h-4v-2zm0 4h4v2h-4v-2zm0 4h4v2h-4v-2zm6-12h4v2h-4v-2zm0 4h4v2h-4v-2zm0 4h4v2h-4v-2zm0 4h4v2h-4v-2z\"/></g></symbol><symbol id=\"file-type-slide\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\"><path fill=\"#FFDEC1\" d=\"M0 3.991C0 2.891.89 2 2.004 2H25l7 7v19.005C32 29.107 31.11 30 29.998 30H2.002C.896 30 0 29.1 0 28.009V3.99z\"/><path fill=\"#FF9433\" d=\"M24.5 2c-.276 0-.5.23-.5.5V10h7.5c.276 0 .5-.232.5-.5V9l-7-7h-.5zM9.996 18h16v2h-16v-2zm0 4h16v2h-16v-2zM6 18h2v2H6v-2zm0 4h2v2H6v-2zm10-6a4 4 0 0 0 4-4h-4V8a4 4 0 1 0 0 8zm1-5V7c2 0 4 2 4 4h-4z\"/></g></symbol><symbol id=\"file-type-text\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\"><path fill=\"#B2D3FF\" d=\"M3 2.002C3 .896 3.89 0 4.997 0H22l7 7v22.996A2 2 0 0 1 27.003 32H4.997A1.995 1.995 0 0 1 3 29.998V2.002z\"/><path fill=\"#197BFF\" d=\"M21.5 0c-.276 0-.5.23-.5.5V8h7.5c.276 0 .5-.232.5-.5V7l-7-7h-.5zM9 11h14v2H9v-2zm0 4h12v2H9v-2zm0 4h14v2H9v-2zm0 4h10v2H9v-2z\"/></g></symbol><symbol id=\"file-type-video\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\"><path fill=\"#FFC5CE\" d=\"M1 2.992C1 1.892 1.898 1 2.992 1h26.016C30.108 1 31 1.898 31 2.992v26.016c0 1.1-.898 1.992-1.992 1.992H2.992C1.892 31 1 30.102 1 29.008V2.992zm1 12.017C2 14.452 2.443 14 3.01 14h1.98c.558 0 1.01.443 1.01 1.01v1.98C6 17.549 5.557 18 4.99 18H3.01C2.451 18 2 17.557 2 16.99v-1.98zm24 0c0-.557.443-1.009 1.01-1.009h1.98c.558 0 1.01.443 1.01 1.01v1.98c0 .558-.443 1.01-1.01 1.01h-1.98c-.558 0-1.01-.443-1.01-1.01v-1.98zM2 9A1 1 0 0 1 3.01 8h1.98C5.549 8 6 8.444 6 9v3a1 1 0 0 1-1.01 1H3.01C2.451 13 2 12.556 2 12V9zm24 0A1 1 0 0 1 27.01 8h1.98c.558 0 1.01.444 1.01 1v3a1 1 0 0 1-1.01 1h-1.98c-.558 0-1.01-.444-1.01-1V9zM2 26A1 1 0 0 1 3.01 25h1.98c.558 0 1.01.444 1.01 1v3a1 1 0 0 1-1.01 1H3.01C2.451 30 2 29.556 2 29v-3zm24 0A1 1 0 0 1 27.01 25h1.98c.558 0 1.01.444 1.01 1v3a1 1 0 0 1-1.01 1h-1.98c-.558 0-1.01-.444-1.01-1v-3zM2 3A1 1 0 0 1 3.01 2h1.98C5.549 2 6 2.444 6 3v3a1 1 0 0 1-1.01 1H3.01C2.451 7 2 6.556 2 6V3zm24 0A1 1 0 0 1 27.01 2h1.98c.558 0 1.01.444 1.01 1v3a1 1 0 0 1-1.01 1h-1.98C26.451 7 26 6.556 26 6V3zM2 20A1 1 0 0 1 3.01 19h1.98c.558 0 1.01.444 1.01 1v3a1 1 0 0 1-1.01 1H3.01C2.451 24 2 23.556 2 23v-3zm24 0A1 1 0 0 1 27.01 19h1.98c.558 0 1.01.444 1.01 1v3a1 1 0 0 1-1.01 1h-1.98c-.558 0-1.01-.444-1.01-1v-3z\"/><path fill=\"#FF405D\" d=\"M12 10.615c0-.554.38-.775.853-.491l8.294 4.977c.471.282.473.739 0 1.023L12.853 21.1c-.471.282-.853.055-.853-.491v-9.995z\"/></g></symbol><symbol id=\"file-type-zip\" viewBox=\"0 0 32 32\"><g fill=\"none\" fill-rule=\"evenodd\" transform=\"translate(3)\"><rect width=\"26\" height=\"32\" fill=\"#D1D5DB\" rx=\"2\"/><path fill=\"#4F5B69\" d=\"M11 1h2v2h-2V1zm0 4h2v2h-2V5zm0 4h2v2h-2V9zm2-6h2v2h-2V3zm0 4h2v2h-2V7zm-2 5h4v7h-4v-7zm1 1h2v2h-2v-2z\"/></g></symbol></svg>";
 
 /***/ }),
 
@@ -29143,6 +29833,40 @@ module.exports = {
   "primaryColorLight": "var(--primaryColorLight)",
   "primaryContrastTextColor": "var(--primaryContrastTextColor)"
 };
+
+/***/ }),
+
+/***/ "./node_modules/cozy-ui/transpiled/react/proptypes.js":
+/*!************************************************************!*\
+  !*** ./node_modules/cozy-ui/transpiled/react/proptypes.js ***!
+  \************************************************************/
+/*! exports provided: AppDoctype, FileDoctype */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "AppDoctype", function() { return AppDoctype; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "FileDoctype", function() { return FileDoctype; });
+/* harmony import */ var prop_types__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! prop-types */ "./node_modules/prop-types/index.js");
+/* harmony import */ var prop_types__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(prop_types__WEBPACK_IMPORTED_MODULE_0__);
+
+var AppDoctype = prop_types__WEBPACK_IMPORTED_MODULE_0___default.a.shape({
+  name: prop_types__WEBPACK_IMPORTED_MODULE_0___default.a.string,
+  slug: prop_types__WEBPACK_IMPORTED_MODULE_0___default.a.string,
+  developer: prop_types__WEBPACK_IMPORTED_MODULE_0___default.a.object,
+  links: prop_types__WEBPACK_IMPORTED_MODULE_0___default.a.shape({
+    icon: prop_types__WEBPACK_IMPORTED_MODULE_0___default.a.string
+  }),
+  latest_version: prop_types__WEBPACK_IMPORTED_MODULE_0___default.a.shape({
+    version: prop_types__WEBPACK_IMPORTED_MODULE_0___default.a.string
+  })
+});
+var FileDoctype = prop_types__WEBPACK_IMPORTED_MODULE_0___default.a.shape({
+  _id: prop_types__WEBPACK_IMPORTED_MODULE_0___default.a.string,
+  class: prop_types__WEBPACK_IMPORTED_MODULE_0___default.a.string,
+  mime: prop_types__WEBPACK_IMPORTED_MODULE_0___default.a.string,
+  name: prop_types__WEBPACK_IMPORTED_MODULE_0___default.a.string
+});
 
 /***/ }),
 
@@ -75586,10 +76310,10 @@ function warning(message) {
 
 /***/ }),
 
-/***/ "./node_modules/regenerator-runtime/runtime-module.js":
-/*!************************************************************!*\
-  !*** ./node_modules/regenerator-runtime/runtime-module.js ***!
-  \************************************************************/
+/***/ "./node_modules/regenerator-runtime/runtime.js":
+/*!*****************************************************!*\
+  !*** ./node_modules/regenerator-runtime/runtime.js ***!
+  \*****************************************************/
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
@@ -75600,53 +76324,7 @@ function warning(message) {
  * LICENSE file in the root directory of this source tree.
  */
 
-// This method of obtaining a reference to the global object needs to be
-// kept identical to the way it is obtained in runtime.js
-var g = (function() { return this })() || Function("return this")();
-
-// Use `getOwnPropertyNames` because not all browsers support calling
-// `hasOwnProperty` on the global `self` object in a worker. See #183.
-var hadRuntime = g.regeneratorRuntime &&
-  Object.getOwnPropertyNames(g).indexOf("regeneratorRuntime") >= 0;
-
-// Save the old regeneratorRuntime in case it needs to be restored later.
-var oldRuntime = hadRuntime && g.regeneratorRuntime;
-
-// Force reevalutation of runtime.js.
-g.regeneratorRuntime = undefined;
-
-module.exports = __webpack_require__(/*! ./runtime */ "./node_modules/regenerator-runtime/runtime.js");
-
-if (hadRuntime) {
-  // Restore the original runtime.
-  g.regeneratorRuntime = oldRuntime;
-} else {
-  // Remove the global property added by runtime.js.
-  try {
-    delete g.regeneratorRuntime;
-  } catch(e) {
-    g.regeneratorRuntime = undefined;
-  }
-}
-
-
-/***/ }),
-
-/***/ "./node_modules/regenerator-runtime/runtime.js":
-/*!*****************************************************!*\
-  !*** ./node_modules/regenerator-runtime/runtime.js ***!
-  \*****************************************************/
-/*! no static exports found */
-/***/ (function(module, exports) {
-
-/**
- * Copyright (c) 2014-present, Facebook, Inc.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
-!(function(global) {
+var runtime = (function (exports) {
   "use strict";
 
   var Op = Object.prototype;
@@ -75656,23 +76334,6 @@ if (hadRuntime) {
   var iteratorSymbol = $Symbol.iterator || "@@iterator";
   var asyncIteratorSymbol = $Symbol.asyncIterator || "@@asyncIterator";
   var toStringTagSymbol = $Symbol.toStringTag || "@@toStringTag";
-
-  var inModule = typeof module === "object";
-  var runtime = global.regeneratorRuntime;
-  if (runtime) {
-    if (inModule) {
-      // If regeneratorRuntime is defined globally and we're in a module,
-      // make the exports object identical to regeneratorRuntime.
-      module.exports = runtime;
-    }
-    // Don't bother evaluating the rest of this file if the runtime was
-    // already defined globally.
-    return;
-  }
-
-  // Define the runtime globally (as expected by generated code) as either
-  // module.exports (if we're in a module) or a new, empty object.
-  runtime = global.regeneratorRuntime = inModule ? module.exports : {};
 
   function wrap(innerFn, outerFn, self, tryLocsList) {
     // If outerFn provided and outerFn.prototype is a Generator, then outerFn.prototype instanceof Generator.
@@ -75686,7 +76347,7 @@ if (hadRuntime) {
 
     return generator;
   }
-  runtime.wrap = wrap;
+  exports.wrap = wrap;
 
   // Try/catch helper to minimize deoptimizations. Returns a completion
   // record like context.tryEntries[i].completion. This interface could
@@ -75757,7 +76418,7 @@ if (hadRuntime) {
     });
   }
 
-  runtime.isGeneratorFunction = function(genFun) {
+  exports.isGeneratorFunction = function(genFun) {
     var ctor = typeof genFun === "function" && genFun.constructor;
     return ctor
       ? ctor === GeneratorFunction ||
@@ -75767,7 +76428,7 @@ if (hadRuntime) {
       : false;
   };
 
-  runtime.mark = function(genFun) {
+  exports.mark = function(genFun) {
     if (Object.setPrototypeOf) {
       Object.setPrototypeOf(genFun, GeneratorFunctionPrototype);
     } else {
@@ -75784,7 +76445,7 @@ if (hadRuntime) {
   // `yield regeneratorRuntime.awrap(x)`, so that the runtime can test
   // `hasOwn.call(value, "__await")` to determine if the yielded value is
   // meant to be awaited.
-  runtime.awrap = function(arg) {
+  exports.awrap = function(arg) {
     return { __await: arg };
   };
 
@@ -75809,22 +76470,14 @@ if (hadRuntime) {
         return Promise.resolve(value).then(function(unwrapped) {
           // When a yielded Promise is resolved, its final value becomes
           // the .value of the Promise<{value,done}> result for the
-          // current iteration. If the Promise is rejected, however, the
-          // result for this iteration will be rejected with the same
-          // reason. Note that rejections of yielded Promises are not
-          // thrown back into the generator function, as is the case
-          // when an awaited Promise is rejected. This difference in
-          // behavior between yield and await is important, because it
-          // allows the consumer to decide what to do with the yielded
-          // rejection (swallow it and continue, manually .throw it back
-          // into the generator, abandon iteration, whatever). With
-          // await, by contrast, there is no opportunity to examine the
-          // rejection reason outside the generator function, so the
-          // only option is to throw it from the await expression, and
-          // let the generator function handle the exception.
+          // current iteration.
           result.value = unwrapped;
           resolve(result);
-        }, reject);
+        }, function(error) {
+          // If a rejected Promise was yielded, throw the rejection back
+          // into the async generator function so it can be handled there.
+          return invoke("throw", error, resolve, reject);
+        });
       }
     }
 
@@ -75867,17 +76520,17 @@ if (hadRuntime) {
   AsyncIterator.prototype[asyncIteratorSymbol] = function () {
     return this;
   };
-  runtime.AsyncIterator = AsyncIterator;
+  exports.AsyncIterator = AsyncIterator;
 
   // Note that simple async functions are implemented on top of
   // AsyncIterator objects; they just return a Promise for the value of
   // the final result produced by the iterator.
-  runtime.async = function(innerFn, outerFn, self, tryLocsList) {
+  exports.async = function(innerFn, outerFn, self, tryLocsList) {
     var iter = new AsyncIterator(
       wrap(innerFn, outerFn, self, tryLocsList)
     );
 
-    return runtime.isGeneratorFunction(outerFn)
+    return exports.isGeneratorFunction(outerFn)
       ? iter // If outerFn is a generator, return the full iterator.
       : iter.next().then(function(result) {
           return result.done ? result.value : iter.next();
@@ -75974,7 +76627,8 @@ if (hadRuntime) {
       context.delegate = null;
 
       if (context.method === "throw") {
-        if (delegate.iterator.return) {
+        // Note: ["return"] must be used for ES3 parsing compatibility.
+        if (delegate.iterator["return"]) {
           // If the delegate iterator has a return method, give it a
           // chance to clean up.
           context.method = "return";
@@ -76094,7 +76748,7 @@ if (hadRuntime) {
     this.reset(true);
   }
 
-  runtime.keys = function(object) {
+  exports.keys = function(object) {
     var keys = [];
     for (var key in object) {
       keys.push(key);
@@ -76155,7 +76809,7 @@ if (hadRuntime) {
     // Return an iterator with no values.
     return { next: doneResult };
   }
-  runtime.values = values;
+  exports.values = values;
 
   function doneResult() {
     return { value: undefined, done: true };
@@ -76360,12 +77014,35 @@ if (hadRuntime) {
       return ContinueSentinel;
     }
   };
-})(
-  // In sloppy mode, unbound `this` refers to the global object, fallback to
-  // Function constructor if we're in global strict mode. That is sadly a form
-  // of indirect eval which violates Content Security Policy.
-  (function() { return this })() || Function("return this")()
-);
+
+  // Regardless of whether this script is executing as a CommonJS module
+  // or not, return the runtime object so that we can declare the variable
+  // regeneratorRuntime in the outer scope, which allows this module to be
+  // injected easily by `bin/regenerator --include-runtime script.js`.
+  return exports;
+
+}(
+  // If this script is executing as a CommonJS module, use module.exports
+  // as the regeneratorRuntime namespace. Otherwise create a new empty
+  // object. Either way, the resulting object will be used to initialize
+  // the regeneratorRuntime variable at the top of this file.
+   true ? module.exports : undefined
+));
+
+try {
+  regeneratorRuntime = runtime;
+} catch (accidentalStrictMode) {
+  // This module should not be running in strict mode, so the above
+  // assignment should always work unless something is misconfigured. Just
+  // in case runtime.js accidentally runs in strict mode, we can escape
+  // strict mode using a global Function call. This could conceivably fail
+  // if a Content Security Policy forbids using Function, but in that case
+  // the proper solution is to fix the accidental strict mode problem. If
+  // you've misconfigured your bundler to force strict mode and applied a
+  // CSP to forbid Function, and you're not willing to fix either of those
+  // problems, please detail your unique predicament in a GitHub issue.
+  Function("r", "regeneratorRuntime = r")(runtime);
+}
 
 
 /***/ }),
@@ -80257,6 +80934,337 @@ function symbolObservablePonyfill(root) {
 
 /***/ }),
 
+/***/ "./node_modules/url-search-params-polyfill/index.js":
+/*!**********************************************************!*\
+  !*** ./node_modules/url-search-params-polyfill/index.js ***!
+  \**********************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+/* WEBPACK VAR INJECTION */(function(global) {/**
+ *
+ *
+ * @author Jerry Bendy <jerry@icewingcc.com>
+ * @licence MIT
+ *
+ */
+
+(function(self) {
+    'use strict';
+
+    var nativeURLSearchParams = (self.URLSearchParams && self.URLSearchParams.prototype.get) ? self.URLSearchParams : null,
+        isSupportObjectConstructor = nativeURLSearchParams && (new nativeURLSearchParams({a: 1})).toString() === 'a=1',
+        // There is a bug in safari 10.1 (and earlier) that incorrectly decodes `%2B` as an empty space and not a plus.
+        decodesPlusesCorrectly = nativeURLSearchParams && (new nativeURLSearchParams('s=%2B').get('s') === '+'),
+        __URLSearchParams__ = "__URLSearchParams__",
+        // Fix bug in Edge which cannot encode ' &' correctly
+        encodesAmpersandsCorrectly = nativeURLSearchParams ? (function() {
+            var ampersandTest = new nativeURLSearchParams();
+            ampersandTest.append('s', ' &');
+            return ampersandTest.toString() === 's=+%26';
+        })() : true,
+        prototype = URLSearchParamsPolyfill.prototype,
+        iterable = !!(self.Symbol && self.Symbol.iterator);
+
+    if (nativeURLSearchParams && isSupportObjectConstructor && decodesPlusesCorrectly && encodesAmpersandsCorrectly) {
+        return;
+    }
+
+
+    /**
+     * Make a URLSearchParams instance
+     *
+     * @param {object|string|URLSearchParams} search
+     * @constructor
+     */
+    function URLSearchParamsPolyfill(search) {
+        search = search || "";
+
+        // support construct object with another URLSearchParams instance
+        if (search instanceof URLSearchParams || search instanceof URLSearchParamsPolyfill) {
+            search = search.toString();
+        }
+        this [__URLSearchParams__] = parseToDict(search);
+    }
+
+
+    /**
+     * Appends a specified key/value pair as a new search parameter.
+     *
+     * @param {string} name
+     * @param {string} value
+     */
+    prototype.append = function(name, value) {
+        appendTo(this [__URLSearchParams__], name, value);
+    };
+
+    /**
+     * Deletes the given search parameter, and its associated value,
+     * from the list of all search parameters.
+     *
+     * @param {string} name
+     */
+    prototype['delete'] = function(name) {
+        delete this [__URLSearchParams__] [name];
+    };
+
+    /**
+     * Returns the first value associated to the given search parameter.
+     *
+     * @param {string} name
+     * @returns {string|null}
+     */
+    prototype.get = function(name) {
+        var dict = this [__URLSearchParams__];
+        return name in dict ? dict[name][0] : null;
+    };
+
+    /**
+     * Returns all the values association with a given search parameter.
+     *
+     * @param {string} name
+     * @returns {Array}
+     */
+    prototype.getAll = function(name) {
+        var dict = this [__URLSearchParams__];
+        return name in dict ? dict [name].slice(0) : [];
+    };
+
+    /**
+     * Returns a Boolean indicating if such a search parameter exists.
+     *
+     * @param {string} name
+     * @returns {boolean}
+     */
+    prototype.has = function(name) {
+        return name in this [__URLSearchParams__];
+    };
+
+    /**
+     * Sets the value associated to a given search parameter to
+     * the given value. If there were several values, delete the
+     * others.
+     *
+     * @param {string} name
+     * @param {string} value
+     */
+    prototype.set = function set(name, value) {
+        this [__URLSearchParams__][name] = ['' + value];
+    };
+
+    /**
+     * Returns a string containg a query string suitable for use in a URL.
+     *
+     * @returns {string}
+     */
+    prototype.toString = function() {
+        var dict = this[__URLSearchParams__], query = [], i, key, name, value;
+        for (key in dict) {
+            name = encode(key);
+            for (i = 0, value = dict[key]; i < value.length; i++) {
+                query.push(name + '=' + encode(value[i]));
+            }
+        }
+        return query.join('&');
+    };
+
+    // There is a bug in Safari 10.1 and `Proxy`ing it is not enough.
+    var forSureUsePolyfill = !decodesPlusesCorrectly;
+    var useProxy = (!forSureUsePolyfill && nativeURLSearchParams && !isSupportObjectConstructor && self.Proxy)
+    /*
+     * Apply polifill to global object and append other prototype into it
+     */
+    Object.defineProperty(self, 'URLSearchParams', {
+        value: (useProxy ?
+            // Safari 10.0 doesn't support Proxy, so it won't extend URLSearchParams on safari 10.0
+            new Proxy(nativeURLSearchParams, {
+                construct: function(target, args) {
+                    return new target((new URLSearchParamsPolyfill(args[0]).toString()));
+                }
+            }) :
+            URLSearchParamsPolyfill)
+    });
+
+    var USPProto = self.URLSearchParams.prototype;
+
+    USPProto.polyfill = true;
+
+    /**
+     *
+     * @param {function} callback
+     * @param {object} thisArg
+     */
+    USPProto.forEach = USPProto.forEach || function(callback, thisArg) {
+        var dict = parseToDict(this.toString());
+        Object.getOwnPropertyNames(dict).forEach(function(name) {
+            dict[name].forEach(function(value) {
+                callback.call(thisArg, value, name, this);
+            }, this);
+        }, this);
+    };
+
+    /**
+     * Sort all name-value pairs
+     */
+    USPProto.sort = USPProto.sort || function() {
+        var dict = parseToDict(this.toString()), keys = [], k, i, j;
+        for (k in dict) {
+            keys.push(k);
+        }
+        keys.sort();
+
+        for (i = 0; i < keys.length; i++) {
+            this['delete'](keys[i]);
+        }
+        for (i = 0; i < keys.length; i++) {
+            var key = keys[i], values = dict[key];
+            for (j = 0; j < values.length; j++) {
+                this.append(key, values[j]);
+            }
+        }
+    };
+
+    /**
+     * Returns an iterator allowing to go through all keys of
+     * the key/value pairs contained in this object.
+     *
+     * @returns {function}
+     */
+    USPProto.keys = USPProto.keys || function() {
+        var items = [];
+        this.forEach(function(item, name) {
+            items.push(name);
+        });
+        return makeIterator(items);
+    };
+
+    /**
+     * Returns an iterator allowing to go through all values of
+     * the key/value pairs contained in this object.
+     *
+     * @returns {function}
+     */
+    USPProto.values = USPProto.values || function() {
+        var items = [];
+        this.forEach(function(item) {
+            items.push(item);
+        });
+        return makeIterator(items);
+    };
+
+    /**
+     * Returns an iterator allowing to go through all key/value
+     * pairs contained in this object.
+     *
+     * @returns {function}
+     */
+    USPProto.entries = USPProto.entries || function() {
+        var items = [];
+        this.forEach(function(item, name) {
+            items.push([name, item]);
+        });
+        return makeIterator(items);
+    };
+
+
+    if (iterable) {
+        USPProto[self.Symbol.iterator] = USPProto[self.Symbol.iterator] || USPProto.entries;
+    }
+
+
+    function encode(str) {
+        var replace = {
+            '!': '%21',
+            "'": '%27',
+            '(': '%28',
+            ')': '%29',
+            '~': '%7E',
+            '%20': '+',
+            '%00': '\x00'
+        };
+        return encodeURIComponent(str).replace(/[!'\(\)~]|%20|%00/g, function(match) {
+            return replace[match];
+        });
+    }
+
+    function decode(str) {
+        return str
+            .replace(/[ +]/g, '%20')
+            .replace(/(%[a-f0-9]{2})+/ig, function(match) {
+                return decodeURIComponent(match);
+            });
+    }
+
+    function makeIterator(arr) {
+        var iterator = {
+            next: function() {
+                var value = arr.shift();
+                return {done: value === undefined, value: value};
+            }
+        };
+
+        if (iterable) {
+            iterator[self.Symbol.iterator] = function() {
+                return iterator;
+            };
+        }
+
+        return iterator;
+    }
+
+    function parseToDict(search) {
+        var dict = {};
+
+        if (typeof search === "object") {
+            for (var key in search) {
+                if (search.hasOwnProperty(key)) {
+                    appendTo(dict, key, search[key])
+                }
+            }
+
+        } else {
+            // remove first '?'
+            if (search.indexOf("?") === 0) {
+                search = search.slice(1);
+            }
+
+            var pairs = search.split("&");
+            for (var j = 0; j < pairs.length; j++) {
+                var value = pairs [j],
+                    index = value.indexOf('=');
+
+                if (-1 < index) {
+                    appendTo(dict, decode(value.slice(0, index)), decode(value.slice(index + 1)));
+
+                } else {
+                    if (value) {
+                        appendTo(dict, decode(value), '');
+                    }
+                }
+            }
+        }
+
+        return dict;
+    }
+
+    function appendTo(dict, name, value) {
+        var val = typeof value === 'string' ? value : (
+            value !== null && value !== undefined && typeof value.toString === 'function' ? value.toString() : JSON.stringify(value)
+        )
+
+        if (name in dict) {
+            dict[name].push(val);
+        } else {
+            dict[name] = [val];
+        }
+    }
+
+})(typeof global !== 'undefined' ? global : (typeof window !== 'undefined' ? window : this));
+
+/* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../webpack/buildin/global.js */ "./node_modules/webpack/buildin/global.js")))
+
+/***/ }),
+
 /***/ "./node_modules/warning/browser.js":
 /*!*****************************************!*\
   !*** ./node_modules/warning/browser.js ***!
@@ -80547,6 +81555,7 @@ function (_React$Component) {
   }, {
     key: "buildAppUrl",
     value: function buildAppUrl(href) {
+      if (!href) return;
       var url = new URL(href);
       var queryParams = AppItem.buildQueryParams(this.props, this.context);
 
@@ -80577,6 +81586,7 @@ function (_React$Component) {
           useHomeIcon = _this$props.useHomeIcon,
           app = _this$props.app;
       var dataIcon = app.slug ? "icon-".concat(app.slug) : '';
+      console.log('app', app);
       return _react.default.createElement(_AppLinker.default, {
         onAppSwitch: this.onAppSwitch,
         slug: app.slug,
@@ -82612,6 +83622,8 @@ var _react = _interopRequireDefault(__webpack_require__(/*! react */ "./config/a
 
 var _I18n = __webpack_require__(/*! cozy-ui/react/I18n */ "./node_modules/cozy-ui/transpiled/react/I18n/index.js");
 
+var _Button = __webpack_require__(/*! cozy-ui/react/Button */ "./node_modules/cozy-ui/transpiled/react/Button/index.js");
+
 var _StorageData = _interopRequireDefault(__webpack_require__(/*! components/Settings/StorageData */ "./src/components/Settings/StorageData.jsx"));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
@@ -82655,14 +83667,16 @@ var Settings = function Settings(_ref) {
     className: "coz-nav-group"
   }, _react.default.createElement("li", {
     className: "coz-nav-settings-item"
-  }, _react.default.createElement("button", {
+  }, _react.default.createElement(_Button.Button, {
     type: "button",
     role: "menuitem",
-    "data-icon": "icon-claudy",
-    "aria-busy": isClaudyLoading,
+    className: "coz-nav-settings-item-btn",
+    icon: "cozy-negative",
+    busy: isClaudyLoading,
     onClick: onClaudy,
-    title: t('claudy.title')
-  }, t('claudy.title')))), !isDrawer && storageData && _react.default.createElement("ul", {
+    title: t('claudy.title'),
+    label: t('claudy.title')
+  }))), !isDrawer && storageData && _react.default.createElement("ul", {
     className: "coz-nav-group"
   }, _react.default.createElement("li", {
     className: "coz-nav-settings-item"
@@ -82678,13 +83692,15 @@ var Settings = function Settings(_ref) {
     className: "coz-nav-group"
   }, _react.default.createElement("li", {
     className: "coz-nav-settings-item"
-  }, _react.default.createElement("button", {
+  }, _react.default.createElement(_Button.Button, {
     type: "button",
     role: "menuitem",
+    className: "coz-nav-settings-item-btn",
     onClick: toggleSupport,
-    "data-icon": "icon-help",
-    title: t('help')
-  }, t('help')))), _react.default.createElement("ul", {
+    icon: "help",
+    title: t('help'),
+    label: t('help')
+  }))), _react.default.createElement("ul", {
     className: "coz-nav-group"
   }, _react.default.createElement("li", {
     className: "coz-nav-settings-item"
@@ -82770,6 +83786,8 @@ var _react = _interopRequireWildcard(__webpack_require__(/*! react */ "./config/
 var _reactRedux = __webpack_require__(/*! react-redux */ "./node_modules/react-redux/es/index.js");
 
 var _I18n = __webpack_require__(/*! cozy-ui/react/I18n */ "./node_modules/cozy-ui/transpiled/react/I18n/index.js");
+
+var _Button = __webpack_require__(/*! cozy-ui/react/Button */ "./node_modules/cozy-ui/transpiled/react/Button/index.js");
 
 var _SettingsContent = _interopRequireDefault(__webpack_require__(/*! components/Settings/SettingsContent */ "./src/components/Settings/SettingsContent.jsx"));
 
@@ -82873,14 +83891,16 @@ function (_Component) {
         ref: function ref(_ref) {
           _this2.rootRef = _ref;
         }
-      }, _react.default.createElement("button", {
+      }, _react.default.createElement(_Button.Button, {
         type: "button",
+        theme: "text",
         onClick: this.toggleMenu,
         className: "coz-nav-settings-btn",
         "aria-controls": "coz-nav-pop--settings",
-        "aria-busy": isBusy,
-        "data-icon": "icon-cog"
-      }, t('menu.settings')), _react.default.createElement("div", {
+        busy: isBusy,
+        icon: "gear",
+        label: t('menu.settings')
+      }), _react.default.createElement("div", {
         className: "coz-nav-pop coz-nav-pop--settings",
         id: "coz-nav-pop--settings",
         "aria-hidden": !openMenu
@@ -83407,17 +84427,22 @@ var showAPIError = function showAPIError(name) {
 
 var apiReferences = {};
 
+var setProxyToAPI = function setProxyToAPI(fnName) {
+  apiReferences[fnName] = function () {
+    if (exposedAPI[fnName]) {
+      var _exposedAPI;
+
+      return (_exposedAPI = exposedAPI)[fnName].apply(_exposedAPI, arguments);
+    } else {
+      showAPIError(fnName);
+    }
+  };
+};
+
 _helpers.locations.forEach(function (location) {
   var jsAPIName = (0, _helpers.getJsApiName)(location);
   var reactAPIName = (0, _helpers.getReactApiName)(location);
-
-  apiReferences[jsAPIName] = function (value) {
-    if (exposedAPI[jsAPIName]) {
-      return exposedAPI[jsAPIName](value);
-    } else {
-      showAPIError(jsAPIName);
-    }
-  };
+  setProxyToAPI(jsAPIName);
 
   apiReferences[reactAPIName] = function (props) {
     var React = __webpack_require__(/*! react */ "./config/aliases/globalReact.js");
@@ -83428,29 +84453,14 @@ _helpers.locations.forEach(function (location) {
       showAPIError(reactAPIName);
     }
   };
-}); // setLocale API
+});
 
+var _arr = ['setLocale', 'setTheme'];
 
-apiReferences.setLocale = function () {
-  if (exposedAPI.setLocale) {
-    var _exposedAPI;
-
-    return (_exposedAPI = exposedAPI).setLocale.apply(_exposedAPI, arguments);
-  } else {
-    showAPIError('setLocale');
-  }
-}; // setTheme API
-
-
-apiReferences.setTheme = function () {
-  if (exposedAPI.setTheme) {
-    var _exposedAPI2;
-
-    return (_exposedAPI2 = exposedAPI).setTheme.apply(_exposedAPI2, arguments);
-  } else {
-    showAPIError('setTheme');
-  }
-};
+for (var _i = 0; _i < _arr.length; _i++) {
+  var fnName = _arr[_i];
+  setProxyToAPI(fnName);
+}
 
 module.exports = _objectSpread({
   init: init,
@@ -84246,84 +85256,70 @@ var APPS_DOCTYPE = 'io.cozy.apps';
  * @returns {Promise}
  */
 
-function initializeRealtime(_x) {
-  return _initializeRealtime.apply(this, arguments);
-}
+function initializeRealtime(_ref) {
+  var getApp = _ref.getApp,
+      onCreate = _ref.onCreate,
+      onDelete = _ref.onDelete,
+      cozyClient = _ref.cozyClient;
 
-function _initializeRealtime() {
-  _initializeRealtime = _asyncToGenerator(
+  var handleAppCreation =
   /*#__PURE__*/
-  _regenerator.default.mark(function _callee2(_ref) {
-    var getApp, onCreate, onDelete, cozyClient, realtime;
-    return _regenerator.default.wrap(function _callee2$(_context2) {
-      while (1) {
-        switch (_context2.prev = _context2.next) {
-          case 0:
-            getApp = _ref.getApp, onCreate = _ref.onCreate, onDelete = _ref.onDelete, cozyClient = _ref.cozyClient;
+  function () {
+    var _ref2 = _asyncToGenerator(
+    /*#__PURE__*/
+    _regenerator.default.mark(function _callee(app) {
+      var fullApp;
+      return _regenerator.default.wrap(function _callee$(_context) {
+        while (1) {
+          switch (_context.prev = _context.next) {
+            case 0:
+              _context.prev = 0;
+              _context.next = 3;
+              return getApp(app.slug);
 
-            try {
-              realtime = new _cozyRealtime.default({
-                cozyClient: cozyClient
-              });
-              realtime.subscribe('created', APPS_DOCTYPE,
-              /*#__PURE__*/
-              function () {
-                var _ref2 = _asyncToGenerator(
-                /*#__PURE__*/
-                _regenerator.default.mark(function _callee(app) {
-                  var fullApp;
-                  return _regenerator.default.wrap(function _callee$(_context) {
-                    while (1) {
-                      switch (_context.prev = _context.next) {
-                        case 0:
-                          _context.prev = 0;
-                          _context.next = 3;
-                          return getApp(app.slug);
+            case 3:
+              fullApp = _context.sent;
+              _context.next = 9;
+              break;
 
-                        case 3:
-                          fullApp = _context.sent;
-                          _context.next = 9;
-                          break;
+            case 6:
+              _context.prev = 6;
+              _context.t0 = _context["catch"](0);
+              throw new Error("Cannot fetch app ".concat(app.slug, ": ").concat(_context.t0.message));
 
-                        case 6:
-                          _context.prev = 6;
-                          _context.t0 = _context["catch"](0);
-                          throw new Error("Cannot fetch app ".concat(app.slug, ": ").concat(_context.t0.message));
+            case 9:
+              if (typeof onCreate === 'function') {
+                onCreate(fullApp);
+              }
 
-                        case 9:
-                          if (typeof onCreate === 'function') {
-                            onCreate(fullApp);
-                          }
-
-                        case 10:
-                        case "end":
-                          return _context.stop();
-                      }
-                    }
-                  }, _callee, this, [[0, 6]]);
-                }));
-
-                return function (_x2) {
-                  return _ref2.apply(this, arguments);
-                };
-              }());
-              realtime.subscribe('deleted', APPS_DOCTYPE, function (app) {
-                if (typeof onDelete === 'function') {
-                  onDelete(app);
-                }
-              });
-            } catch (error) {
-              console.warn("Cannot initialize realtime in Cozy-bar: ".concat(error.message));
-            }
-
-          case 2:
-          case "end":
-            return _context2.stop();
+            case 10:
+            case "end":
+              return _context.stop();
+          }
         }
-      }
-    }, _callee2, this);
-  }));
-  return _initializeRealtime.apply(this, arguments);
+      }, _callee, this, [[0, 6]]);
+    }));
+
+    return function handleAppCreation(_x) {
+      return _ref2.apply(this, arguments);
+    };
+  }();
+
+  var handleAppRemoval = function handleAppRemoval(app) {
+    if (typeof onDelete === 'function') {
+      onDelete(app);
+    }
+  };
+
+  try {
+    var realtime = new _cozyRealtime.default({
+      cozyClient: cozyClient
+    });
+    realtime.subscribe('created', APPS_DOCTYPE, handleAppCreation);
+    realtime.subscribe('deleted', APPS_DOCTYPE, handleAppRemoval);
+  } catch (error) {
+    console.warn("Cannot initialize realtime in Cozy-bar: ".concat(error.message));
+  }
 }
 
 var _default = initializeRealtime;
@@ -85943,7 +86939,7 @@ var init = function init(_ref2) {
       onDelete = _ref2.onDelete;
   cozyClient = client;
   if (!cozyClient.isLogged) return;
-  return (0, _realtime.default)({
+  (0, _realtime.default)({
     getApp: getApp,
     onCreate: onCreate,
     onDelete: onDelete,
