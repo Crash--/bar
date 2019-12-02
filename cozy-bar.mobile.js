@@ -95643,6 +95643,7 @@ function (_Component) {
       var managerUrlPremiumLink;
       var isFetchingFromQueries;
       var canCheckPremium = (0, _helper.cozyClientCanCheckPremium)();
+      console.log('canCheckPremium', canCheckPremium);
 
       if (canCheckPremium) {
         isFetchingFromQueries = (0, _helper.isFetchingQueries)([diskUsageQuery, instanceQuery, contextQuery]);
@@ -95653,6 +95654,7 @@ function (_Component) {
             diskUsage: diskUsageQuery,
             instance: instanceQuery
           };
+          console.log('isFetchingFromQueries', isFetchingFromQueries);
           shouldDisplayViewOfferButton = instanceModel.shouldDisplayOffers(data);
           managerUrlPremiumLink = instanceModel.buildPremiumLink(data);
         }
