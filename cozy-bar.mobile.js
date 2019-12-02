@@ -95486,21 +95486,34 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.cozyClientCanCheckPremium = exports.isFetchingQueries = void 0;
 
-var _cozyClient = _interopRequireDefault(__webpack_require__(/*! cozy-client */ "./node_modules/cozy-client/dist/index.js"));
-
 var _semverCompare = _interopRequireDefault(__webpack_require__(/*! semver-compare */ "./node_modules/semver-compare/index.js"));
+
+var _stackClient = _interopRequireDefault(__webpack_require__(/*! lib/stack-client */ "./src/lib/stack-client.js"));
 
 var isFetchingQueries = function isFetchingQueries(requests) {
   return requests.some(function (request) {
     return request.fetchStatus === 'loading';
   });
 };
+/**
+ *
+ * @param {cozyClient} forcedCozyClient only used to test purpose
+ *
+ * We can not read `version` from `import CozyClient from cozy-client`
+ * since in that case, we'll read version from the cozy-bar node modules
+ * and not from the app one.
+ *
+ * In order to avoid this issue, we get cozyclient from lib/stack-client
+ * (cozyclient passed by the app to the bar), read the constructor and then
+ * read the version
+ */
+
 
 exports.isFetchingQueries = isFetchingQueries;
 
 var cozyClientCanCheckPremium = function cozyClientCanCheckPremium() {
   var forcedCozyClient = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : null;
-  var cozyClientToUse = forcedCozyClient !== null ? forcedCozyClient : _cozyClient.default;
+  var cozyClientToUse = forcedCozyClient !== null ? forcedCozyClient : _stackClient.default.getClient().constructor;
   if (!cozyClientToUse.version) return false;
   var result = (0, _semverCompare.default)(cozyClientToUse.version, '8.3.0');
   return result >= 0;
@@ -98688,6 +98701,10 @@ var getSettingsAppURL = function getSettingsAppURL() {
     return settings.links.related;
   });
 };
+
+var getClient = function getClient() {
+  return cozyClient;
+};
 /**
  * Initializes the functions to call the cozy stack
  *
@@ -98728,7 +98745,8 @@ var _default = {
   updateAccessToken: updateAccessToken,
   cozyFetchJSON: cozyFetchJSON,
   logout: logout,
-  init: init
+  init: init,
+  getClient: getClient
 };
 exports.default = _default;
 
