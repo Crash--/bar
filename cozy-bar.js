@@ -92219,7 +92219,11 @@ var _defineProperty2 = _interopRequireDefault(__webpack_require__(/*! @babel/run
 
 var _react = _interopRequireDefault(__webpack_require__(/*! react */ "./config/aliases/globalReact.js"));
 
+var _get = _interopRequireDefault(__webpack_require__(/*! lodash/get */ "./node_modules/lodash/get.js"));
+
 var _index = __webpack_require__(/*! proptypes/index */ "./src/proptypes/index.js");
+
+var _cozyClient = __webpack_require__(/*! cozy-client */ "./node_modules/cozy-client/dist/index.js");
 
 var _AppIcon = _interopRequireDefault(__webpack_require__(/*! cozy-ui/react/AppIcon */ "./node_modules/cozy-ui/react/AppIcon/index.jsx"));
 
@@ -92227,11 +92231,13 @@ var _AppLinker = _interopRequireDefault(__webpack_require__(/*! cozy-ui/react/Ap
 
 var _IconCozyHome = _interopRequireDefault(__webpack_require__(/*! components/Apps/IconCozyHome */ "./src/components/Apps/IconCozyHome.jsx"));
 
-var _I18n = __webpack_require__(/*! cozy-ui/react/I18n */ "./node_modules/cozy-ui/react/I18n/index.jsx");
-
 var _stack = _interopRequireDefault(__webpack_require__(/*! lib/stack */ "./src/lib/stack.js"));
 
 var _propTypes = _interopRequireDefault(__webpack_require__(/*! prop-types */ "./node_modules/prop-types/index.js"));
+
+var getAppDisplayName = (0, _get.default)(_cozyClient.models, 'applications.getAppDisplayName', function (app) {
+  return app.namePrefix && app.namePrefix.toLowerCase() !== 'cozy' ? "".concat(app.namePrefix, " ").concat(app.name) : app.name;
+});
 
 var AppItem =
 /*#__PURE__*/
@@ -92296,10 +92302,10 @@ function (_React$Component) {
     key: "render",
     value: function render() {
       var _this$props = this.props,
-          t = _this$props.t,
           useHomeIcon = _this$props.useHomeIcon,
           app = _this$props.app;
       var dataIcon = app.slug ? "icon-".concat(app.slug) : '';
+      var appName = getAppDisplayName(app);
       return _react.default.createElement(_AppLinker.default, {
         onAppSwitch: this.onAppSwitch,
         slug: app.slug,
@@ -92307,16 +92313,13 @@ function (_React$Component) {
       }, function (_ref) {
         var onClick = _ref.onClick,
             href = _ref.href;
-        var label = t("".concat(app.slug, ".name"), {
-          _: app.namePrefix ? "".concat(app.namePrefix, " ").concat(app.name) : app.name
-        });
         return _react.default.createElement("li", {
           className: "coz-nav-apps-item".concat(app.isCurrentApp ? ' --current' : '')
         }, _react.default.createElement("a", {
           role: "menuitem",
           href: href,
           "data-icon": dataIcon,
-          title: label,
+          title: appName,
           onClick: onClick
         }, useHomeIcon ? _react.default.createElement(_IconCozyHome.default, {
           className: "coz-nav-apps-item-icon"
@@ -92326,7 +92329,7 @@ function (_React$Component) {
           key: app.slug
         }, _stack.default.get.iconProps())), _react.default.createElement("p", {
           className: "coz-label"
-        }, label)));
+        }, appName)));
       });
     }
   }]);
@@ -92342,9 +92345,7 @@ AppItem.propTypes = {
   app: _index.appShape.isRequired,
   useHomeIcon: _propTypes.default.bool
 };
-
-var _default = (0, _I18n.translate)()(AppItem);
-
+var _default = AppItem;
 exports.default = _default;
 
 /***/ }),
@@ -94292,7 +94293,8 @@ var SettingsContent = function SettingsContent(_ref) {
       isClaudyLoading = _ref.isClaudyLoading,
       toggleSupport = _ref.toggleSupport,
       shoulDisplayViewOfferButton = _ref.shoulDisplayViewOfferButton,
-      managerUrlPremiumLink = _ref.managerUrlPremiumLink;
+      managerUrlPremiumLink = _ref.managerUrlPremiumLink,
+      viewOfferButtonText = _ref.viewOfferButtonText;
   return _react.default.createElement("div", {
     className: "coz-nav-pop-content"
   }, isDrawer && _react.default.createElement("hr", null), settingsAppURL && _react.default.createElement("ul", {
@@ -94351,8 +94353,8 @@ var SettingsContent = function SettingsContent(_ref) {
     role: "menuitem",
     className: "coz-nav-settings-item-btn",
     icon: "cloud-happy",
-    title: t('view_offers'),
-    label: t('view_offers'),
+    title: viewOfferButtonText,
+    label: viewOfferButtonText,
     href: managerUrlPremiumLink
   }))), !(0, _cozyDeviceHelper.isMobileApp)() && _react.default.createElement("ul", {
     className: "coz-nav-group"
@@ -94391,7 +94393,8 @@ SettingsContent.propTypes = {
   onClaudy: _propTypes.default.oneOfType([_propTypes.default.bool, _propTypes.default.func]),
   isDrawer: _propTypes.default.bool,
   isClaudyLoading: _propTypes.default.bool,
-  toggleSupport: _propTypes.default.func.isRequired
+  toggleSupport: _propTypes.default.func.isRequired,
+  viewOfferButtonText: _propTypes.default.string
 };
 
 var _default = (0, _I18n.translate)()(SettingsContent);
@@ -94457,44 +94460,23 @@ exports.default = _default;
 "use strict";
 
 
-var _interopRequireDefault = __webpack_require__(/*! @babel/runtime/helpers/interopRequireDefault */ "./node_modules/@babel/runtime/helpers/interopRequireDefault.js");
-
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.cozyClientCanCheckPremium = exports.isFetchingQueries = void 0;
 
-var _semverCompare = _interopRequireDefault(__webpack_require__(/*! semver-compare */ "./node_modules/semver-compare/index.js"));
-
-var _stackClient = _interopRequireDefault(__webpack_require__(/*! lib/stack-client */ "./src/lib/stack-client.js"));
+var _stackClient = __webpack_require__(/*! lib/stack-client */ "./src/lib/stack-client.js");
 
 var isFetchingQueries = function isFetchingQueries(requests) {
   return requests.some(function (request) {
     return request.fetchStatus === 'loading';
   });
 };
-/**
- *
- * @param {cozyClient} forcedCozyClient only used to test purpose
- *
- * We can not read `version` from `import CozyClient from cozy-client`
- * since in that case, we'll read version from the cozy-bar node modules
- * and not from the app one.
- *
- * In order to avoid this issue, we get cozyclient from lib/stack-client
- * (cozyclient passed by the app to the bar), read the constructor and then
- * read the version
- */
-
 
 exports.isFetchingQueries = isFetchingQueries;
 
 var cozyClientCanCheckPremium = function cozyClientCanCheckPremium() {
-  var forcedCozyClient = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : null;
-  var cozyClientToUse = forcedCozyClient !== null ? forcedCozyClient : _stackClient.default.getClient().constructor;
-  if (!cozyClientToUse.version) return false;
-  var result = (0, _semverCompare.default)(cozyClientToUse.version, '8.3.0');
-  return result >= 0;
+  return (0, _stackClient.compareClientVersion)('8.3.0');
 };
 
 exports.cozyClientCanCheckPremium = cozyClientCanCheckPremium;
@@ -94557,9 +94539,14 @@ var _queries = __webpack_require__(/*! ../../queries */ "./src/queries/index.js"
 var _helper = __webpack_require__(/*! components/Settings/helper */ "./src/components/Settings/helper.js");
 
 var instanceModel = undefined;
+var hasAnOffer = undefined;
 
 if (_cozyClient.models) {
-  instanceModel = _cozyClient.models.instance;
+  instanceModel = _cozyClient.models.instance; //TODO fallback from cozy-client
+
+  hasAnOffer = function hasAnOffer(data) {
+    return !instanceModel.isSelfHosted(data) && instanceModel.arePremiumLinksEnabled(data) && instanceModel.getUuid(data) && !instanceModel.isFreemiumUser(data);
+  };
 }
 
 var Settings =
@@ -94633,8 +94620,8 @@ function (_Component) {
       var shouldDisplayViewOfferButton = false;
       var managerUrlPremiumLink;
       var isFetchingFromQueries;
+      var viewOfferButtonText = '';
       var canCheckPremium = (0, _helper.cozyClientCanCheckPremium)();
-      console.log('canCheckPremium', canCheckPremium);
 
       if (canCheckPremium) {
         isFetchingFromQueries = (0, _helper.isFetchingQueries)([diskUsageQuery, instanceQuery, contextQuery]);
@@ -94645,8 +94632,14 @@ function (_Component) {
             diskUsage: diskUsageQuery,
             instance: instanceQuery
           };
-          console.log('isFetchingFromQueries', isFetchingFromQueries);
           shouldDisplayViewOfferButton = instanceModel.shouldDisplayOffers(data);
+
+          if (shouldDisplayViewOfferButton && !hasAnOffer(data)) {
+            viewOfferButtonText = t('view_offers');
+          } else if (hasAnOffer(data)) {
+            viewOfferButtonText = t('view_my_offer');
+          }
+
           managerUrlPremiumLink = instanceModel.buildPremiumLink(data);
         }
       }
@@ -94691,7 +94684,8 @@ function (_Component) {
         storageData: storageData,
         settingsAppURL: settingsAppURL,
         shoulDisplayViewOfferButton: shouldDisplayViewOfferButton,
-        managerUrlPremiumLink: managerUrlPremiumLink
+        managerUrlPremiumLink: managerUrlPremiumLink,
+        viewOfferButtonText: viewOfferButtonText
       }))));
     }
   }]);
@@ -94855,17 +94849,6 @@ exports.default = _default;
 /***/ (function(module, exports) {
 
 module.exports = {"desktop":{"icon":"icon-laptop.svg","link":{"type":"external"}},"mobile":{"icon":"icon-phone.svg","link":{"type":"external"}},"support":{"icon":"icon-question-mark.svg","link":{"type":"external"}}}
-
-/***/ }),
-
-/***/ "./src/config/excludedApps.yaml":
-/*!**************************************!*\
-  !*** ./src/config/excludedApps.yaml ***!
-  \**************************************/
-/*! no static exports found */
-/***/ (function(module, exports) {
-
-module.exports = ["settings"]
 
 /***/ }),
 
@@ -96117,8 +96100,6 @@ var _stack = _interopRequireDefault(__webpack_require__(/*! lib/stack */ "./src/
 
 var _lodash = _interopRequireDefault(__webpack_require__(/*! lodash.unionwith */ "./node_modules/lodash.unionwith/index.js"));
 
-var _excludedApps = _interopRequireDefault(__webpack_require__(/*! config/excludedApps */ "./src/config/excludedApps.yaml"));
-
 // constants
 var DELETE_APP = 'DELETE_APP';
 var RECEIVE_APP = 'RECEIVE_APP';
@@ -96226,9 +96207,7 @@ var fetchApps = function fetchApps() {
 
               case 4:
                 rawAppList = _context.sent;
-                apps = rawAppList.filter(function (app) {
-                  return !_excludedApps.default.includes(app.attributes.slug);
-                }).map(mapApp);
+                apps = rawAppList.map(mapApp);
 
                 if (rawAppList.length) {
                   _context.next = 8;
@@ -97289,11 +97268,13 @@ var _interopRequireDefault = __webpack_require__(/*! @babel/runtime/helpers/inte
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.default = void 0;
+exports.default = exports.compareClientVersion = void 0;
 
 var _regenerator = _interopRequireDefault(__webpack_require__(/*! @babel/runtime/regenerator */ "./node_modules/@babel/runtime/regenerator/index.js"));
 
 var _asyncToGenerator2 = _interopRequireDefault(__webpack_require__(/*! @babel/runtime/helpers/asyncToGenerator */ "./node_modules/@babel/runtime/helpers/asyncToGenerator.js"));
+
+var _semverCompare = _interopRequireDefault(__webpack_require__(/*! semver-compare */ "./node_modules/semver-compare/index.js"));
 
 var _cozyInterapp = __webpack_require__(/*! cozy-interapp */ "./node_modules/cozy-interapp/dist/index.js");
 
@@ -97679,9 +97660,26 @@ var getSettingsAppURL = function getSettingsAppURL() {
     return settings.links.related;
   });
 };
+/**
+ *
+ * @param {cozyClient} forcedCozyClient only used to test purpose
+ *
+ * We can not read `version` from `import CozyClient from cozy-client`
+ * since in that case, we'll read version from the cozy-bar node modules
+ * and not from the app one.
+ *
+ * In order to avoid this issue, we get the instance passed by the app to the bar),
+ * then read the constructor and then read the version from it
+ */
 
-var getClient = function getClient() {
-  return cozyClient;
+
+var compareClientVersion = function compareClientVersion(targetVersion) {
+  var forcedCozyClient = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
+  var usedClient = cozyClient ? cozyClient.constructor : {};
+  var cozyClientToUse = forcedCozyClient !== null ? forcedCozyClient : usedClient;
+  if (!cozyClientToUse.version) return false;
+  var result = (0, _semverCompare.default)(cozyClientToUse.version, targetVersion);
+  return result >= 0;
 };
 /**
  * Initializes the functions to call the cozy stack
@@ -97694,6 +97692,8 @@ var getClient = function getClient() {
  * @returns {Promise}
  */
 
+
+exports.compareClientVersion = compareClientVersion;
 
 var init = function init(_ref2) {
   var client = _ref2.cozyClient,
@@ -97723,8 +97723,7 @@ var _default = {
   updateAccessToken: updateAccessToken,
   cozyFetchJSON: cozyFetchJSON,
   logout: logout,
-  init: init,
-  getClient: getClient
+  init: init
 };
 exports.default = _default;
 
@@ -98068,104 +98067,16 @@ webpackContext.id = "./src/locales sync recursive ^\\.\\/.*$";
 /*!*****************************!*\
   !*** ./src/locales/ar.json ***!
   \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"الأجهزة المتصلة\",\"storage\":\"التخزين\",\"storage_phrase\":\"%{diskUsage} جيجابيت من %{diskQuota} جيجابيت مستخدمة\",\"help\":\"مساعدة\",\"logout\":\"تسجيل الخروج\",\"soon\":\"قريبًا\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"لم يتم العثور على أي تطبيق في الكوزي.\",\"menu\":{\"apps\":\"التطبيقات\",\"settings\":\"الإعدادات\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"تطبيقات كوزي\",\"partners\":\"تطبيقات الشركاء\",\"ptnb\":\"expPTNB\",\"others\":\"تطبيقات أخرى\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"إبحث في كل مكان\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"الأجهزة المتصلة\",\"storage\":\"التخزين\",\"storage_phrase\":\"%{diskUsage} جيجابيت من %{diskQuota} جيجابيت مستخدمة\",\"view_offers\":\"View offers\",\"help\":\"مساعدة\",\"logout\":\"تسجيل الخروج\",\"soon\":\"قريبًا\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"لم يتم العثور على أي تطبيق في الكوزي.\",\"menu\":{\"apps\":\"التطبيقات\",\"settings\":\"الإعدادات\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"تطبيقات كوزي\",\"partners\":\"تطبيقات الشركاء\",\"ptnb\":\"expPTNB\",\"others\":\"تطبيقات أخرى\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"إبحث في كل مكان\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
 /***/ "./src/locales/ca.json":
 /*!*****************************!*\
   !*** ./src/locales/ca.json ***!
-  \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
-/***/ (function(module) {
-
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
-
-/***/ }),
-
-/***/ "./src/locales/ca_ES.json":
-/*!********************************!*\
-  !*** ./src/locales/ca_ES.json ***!
-  \********************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
-/***/ (function(module) {
-
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
-
-/***/ }),
-
-/***/ "./src/locales/cs.json":
-/*!*****************************!*\
-  !*** ./src/locales/cs.json ***!
-  \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
-/***/ (function(module) {
-
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
-
-/***/ }),
-
-/***/ "./src/locales/cs_CZ.json":
-/*!********************************!*\
-  !*** ./src/locales/cs_CZ.json ***!
-  \********************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
-/***/ (function(module) {
-
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
-
-/***/ }),
-
-/***/ "./src/locales/da.json":
-/*!*****************************!*\
-  !*** ./src/locales/da.json ***!
-  \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
-/***/ (function(module) {
-
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
-
-/***/ }),
-
-/***/ "./src/locales/de.json":
-/*!*****************************!*\
-  !*** ./src/locales/de.json ***!
-  \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
-/***/ (function(module) {
-
-module.exports = JSON.parse("{\"drawer\":\"Menü anzeigen\",\"profile\":\"Profile\",\"connectedDevices\":\"Verbundene Geräte\",\"storage\":\"Speicher\",\"storage_phrase\":\"%{diskUsage} GB von %{diskQuota} GB benutzt\",\"help\":\"Hilfe\",\"logout\":\"Ausloggen\",\"soon\":\"Später\",\"error_UnavailableStack\":\"Der Stapel ist nicht erreichbar (Verbindung Zeitüberschreitung).\",\"error_UnauthorizedStack\":\"Einige Berechtigungen fehlen, die Anwendung kann nicht auf die angeforderte Ressource auf dem Stapel zugreifen.\",\"no_apps\":\"Keine Anwendungen für Cozy gefunden.\",\"menu\":{\"apps\":\"Anwendungen\",\"settings\":\"Einstellungen\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy Anwendungen\",\"partners\":\"Partner Anwendungen\",\"ptnb\":\"expPTNB\",\"others\":\"Andere Anwendungen\"},\"claudy\":{\"title\":\"Wie willst du dein Cozy steuern?\"},\"searchbar\":{\"placeholder\":\"Alle Dateien durchsuchen\",\"empty\":\"Es wurde kein Ergebnis für die Suche \\\"%{query}\\\" gefunden\"},\"permsModal\":{\"title\":\"Greife von deiner Anwendung aus auf dein komplettes Cozy zu\",\"description\":\"Erlaube %{app} den Zugriff auf deine Cozy Anwendungen auf diesem Gerät\",\"button\":\"Erlaube Zugriff\"},\"comingSoon\":{\"store\":{\"title\":\"Die Store Anwendung wird in deinem Cozy bald verfügbar sein.\",\"description\":\"Dank Cozy Store wird es bald möglich sein gewünschte Anwendungen in dein Cozy zu installieren.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Jetzt lesen\"}}}");
-
-/***/ }),
-
-/***/ "./src/locales/de_DE.json":
-/*!********************************!*\
-  !*** ./src/locales/de_DE.json ***!
-  \********************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
-/***/ (function(module) {
-
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
-
-/***/ }),
-
-/***/ "./src/locales/el.json":
-/*!*****************************!*\
-  !*** ./src/locales/el.json ***!
-  \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
-/***/ (function(module) {
-
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
-
-/***/ }),
-
-/***/ "./src/locales/en.json":
-/*!*****************************!*\
-  !*** ./src/locales/en.json ***!
   \*****************************/
 /*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
@@ -98174,14 +98085,102 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 
 /***/ }),
 
+/***/ "./src/locales/ca_ES.json":
+/*!********************************!*\
+  !*** ./src/locales/ca_ES.json ***!
+  \********************************/
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/***/ (function(module) {
+
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+
+/***/ }),
+
+/***/ "./src/locales/cs.json":
+/*!*****************************!*\
+  !*** ./src/locales/cs.json ***!
+  \*****************************/
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/***/ (function(module) {
+
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+
+/***/ }),
+
+/***/ "./src/locales/cs_CZ.json":
+/*!********************************!*\
+  !*** ./src/locales/cs_CZ.json ***!
+  \********************************/
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/***/ (function(module) {
+
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+
+/***/ }),
+
+/***/ "./src/locales/da.json":
+/*!*****************************!*\
+  !*** ./src/locales/da.json ***!
+  \*****************************/
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/***/ (function(module) {
+
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+
+/***/ }),
+
+/***/ "./src/locales/de.json":
+/*!*****************************!*\
+  !*** ./src/locales/de.json ***!
+  \*****************************/
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/***/ (function(module) {
+
+module.exports = JSON.parse("{\"drawer\":\"Menü anzeigen\",\"profile\":\"Profile\",\"connectedDevices\":\"Verbundene Geräte\",\"storage\":\"Speicher\",\"storage_phrase\":\"%{diskUsage} GB von %{diskQuota} GB benutzt\",\"view_offers\":\"View offers\",\"help\":\"Hilfe\",\"logout\":\"Ausloggen\",\"soon\":\"Später\",\"error_UnavailableStack\":\"Der Stapel ist nicht erreichbar (Verbindung Zeitüberschreitung).\",\"error_UnauthorizedStack\":\"Einige Berechtigungen fehlen, die Anwendung kann nicht auf die angeforderte Ressource auf dem Stapel zugreifen.\",\"no_apps\":\"Keine Anwendungen für Cozy gefunden.\",\"menu\":{\"apps\":\"Anwendungen\",\"settings\":\"Einstellungen\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy Anwendungen\",\"partners\":\"Partner Anwendungen\",\"ptnb\":\"expPTNB\",\"others\":\"Andere Anwendungen\"},\"claudy\":{\"title\":\"Wie willst du dein Cozy steuern?\"},\"searchbar\":{\"placeholder\":\"Alle Dateien durchsuchen\",\"empty\":\"Es wurde kein Ergebnis für die Suche \\\"%{query}\\\" gefunden\"},\"permsModal\":{\"title\":\"Greife von deiner Anwendung aus auf dein komplettes Cozy zu\",\"description\":\"Erlaube %{app} den Zugriff auf deine Cozy Anwendungen auf diesem Gerät\",\"button\":\"Erlaube Zugriff\"},\"comingSoon\":{\"store\":{\"title\":\"Die Store Anwendung wird in deinem Cozy bald verfügbar sein.\",\"description\":\"Dank Cozy Store wird es bald möglich sein gewünschte Anwendungen in dein Cozy zu installieren.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Jetzt lesen\"}}}");
+
+/***/ }),
+
+/***/ "./src/locales/de_DE.json":
+/*!********************************!*\
+  !*** ./src/locales/de_DE.json ***!
+  \********************************/
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/***/ (function(module) {
+
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+
+/***/ }),
+
+/***/ "./src/locales/el.json":
+/*!*****************************!*\
+  !*** ./src/locales/el.json ***!
+  \*****************************/
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/***/ (function(module) {
+
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+
+/***/ }),
+
+/***/ "./src/locales/en.json":
+/*!*****************************!*\
+  !*** ./src/locales/en.json ***!
+  \*****************************/
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, view_my_offer, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/***/ (function(module) {
+
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"view_my_offer\":\"View my offer\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+
+/***/ }),
+
 /***/ "./src/locales/eo.json":
 /*!*****************************!*\
   !*** ./src/locales/eo.json ***!
   \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98189,10 +98188,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!*****************************!*\
   !*** ./src/locales/es.json ***!
   \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Mostrar el menu lateral\",\"profile\":\"Perfil\",\"connectedDevices\":\"Aparatos conectados\",\"storage\":\"Espacio en el disco\",\"storage_phrase\":\"%{diskUsage} Go de %{diskQuota} Go\",\"help\":\"Ayuda\",\"logout\":\"Desconectar\",\"soon\":\"pronto\",\"error_UnavailableStack\":\"Conexión a la stack imposible ( se agotó el tiempo para la conexión ).\",\"error_UnauthorizedStack\":\"Faltan algunos permisos, la aplicación no puede acceder a los recursos solicitados.\",\"no_apps\":\"No se han encontrado aplicaciones en su Cozy.\",\"menu\":{\"apps\":\"Aplicaciones\",\"settings\":\"Parámetros\",\"home_mobile\":\"Regresar a Inicio...\",\"home\":\"Regresar a Inicio\"},\"Categories\":{\"cozy\":\"Aplicaciones Cozy\",\"partners\":\"Aplicaciones de asociados\",\"ptnb\":\"expPTNB\",\"others\":\"Otras aplicaciones\"},\"claudy\":{\"title\":\"¿Cómo utilizar su Cozy?\"},\"searchbar\":{\"placeholder\":\"Buscar\",\"empty\":\"No se ha encontrado ningún resultado para su consulta “%{query}”\"},\"permsModal\":{\"title\":\"Acceder a su Cozy desde su aplicación\",\"description\":\"Autorizar a %{app} para mostrar sus aplicaciones Cozy en este aparato\",\"button\":\"Autorizar el acceso\"},\"comingSoon\":{\"store\":{\"title\":\"En breve, la aplicación Store estará disponible en su Cozy\",\"description\":\"Gracias a Cozy Store usted podrá instalar en su Cozy las aplicaciones que desee.\"}},\"banner\":{\"tos-updated\":{\"description\":\"Para cumplir con el RGPD, Cozy Cloud ha actualizado sus Condiciones de utilización que entraron en vigor desde el 25 de mayo de 2018.\",\"CTA\":\"Leerlo ahora\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Mostrar el menu lateral\",\"profile\":\"Perfil\",\"connectedDevices\":\"Aparatos conectados\",\"storage\":\"Espacio en el disco\",\"storage_phrase\":\"%{diskUsage} Go de %{diskQuota} Go\",\"view_offers\":\"View offers\",\"help\":\"Ayuda\",\"logout\":\"Desconectar\",\"soon\":\"pronto\",\"error_UnavailableStack\":\"Conexión a la stack imposible ( se agotó el tiempo para la conexión ).\",\"error_UnauthorizedStack\":\"Faltan algunos permisos, la aplicación no puede acceder a los recursos solicitados.\",\"no_apps\":\"No se han encontrado aplicaciones en su Cozy.\",\"menu\":{\"apps\":\"Aplicaciones\",\"settings\":\"Parámetros\",\"home_mobile\":\"Regresar a Inicio...\",\"home\":\"Regresar a Inicio\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Aplicaciones Cozy\",\"partners\":\"Aplicaciones de asociados\",\"ptnb\":\"expPTNB\",\"others\":\"Otras aplicaciones\"},\"claudy\":{\"title\":\"¿Cómo utilizar su Cozy?\"},\"searchbar\":{\"placeholder\":\"Buscar\",\"empty\":\"No se ha encontrado ningún resultado para su consulta “%{query}”\"},\"permsModal\":{\"title\":\"Acceder a su Cozy desde su aplicación\",\"description\":\"Autorizar a %{app} para mostrar sus aplicaciones Cozy en este aparato\",\"button\":\"Autorizar el acceso\"},\"comingSoon\":{\"store\":{\"title\":\"En breve, la aplicación Store estará disponible en su Cozy\",\"description\":\"Gracias a Cozy Store usted podrá instalar en su Cozy las aplicaciones que desee.\"}},\"banner\":{\"tos-updated\":{\"description\":\"Para cumplir con el RGPD, Cozy Cloud ha actualizado sus Condiciones de utilización que entraron en vigor desde el 25 de mayo de 2018.\",\"CTA\":\"Leerlo ahora\"}}}");
 
 /***/ }),
 
@@ -98200,10 +98199,10 @@ module.exports = JSON.parse("{\"drawer\":\"Mostrar el menu lateral\",\"profile\"
 /*!********************************!*\
   !*** ./src/locales/es_CO.json ***!
   \********************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98211,10 +98210,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!********************************!*\
   !*** ./src/locales/es_ES.json ***!
   \********************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98222,10 +98221,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!*****************************!*\
   !*** ./src/locales/fr.json ***!
   \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Afficher le menu latéral\",\"profile\":\"Profil\",\"connectedDevices\":\"Appareils connectés\",\"storage\":\"Espace disque\",\"storage_phrase\":\"%{diskUsage} Go sur %{diskQuota} Go\",\"help\":\"Aide\",\"logout\":\"Déconnexion\",\"soon\":\"à venir\",\"error_UnavailableStack\":\"Connexion à la stack impossible (connection timed-out)\",\"error_UnauthorizedStack\":\"Des permissions sont manquante, l'application ne peut accéder aux ressources demandées.\",\"no_apps\":\"Pas d'applications Cozy trouvées.\",\"menu\":{\"apps\":\"Applications\",\"settings\":\"Paramètres\",\"home_mobile\":\"Retour à l'accueil...\",\"home\":\"Retour à l'accueil\"},\"Categories\":{\"cozy\":\"Apps Cozy\",\"partners\":\"Expérimentation MesInfos\",\"ptnb\":\"Expérimentation Carnet du logement\",\"others\":\"Autres apps\"},\"claudy\":{\"title\":\"Comment utiliser votre Cozy ?\"},\"searchbar\":{\"placeholder\":\"Rechercher\",\"empty\":\"Aucun résultat trouvé pour la requête \\\"%{query}\\\"\"},\"permsModal\":{\"title\":\"Accéder à ton Cozy à partir de ton application\",\"description\":\"Autoriser %{app} à afficher les applications de ton Cozy sur cet appareil\",\"button\":\"Autoriser l'accès\"},\"comingSoon\":{\"store\":{\"title\":\"L'application Store sera bientôt disponible dans votre Cozy\",\"description\":\"Grâce à cozy Store vous pourrez installer les applications que vous souhaitez sur votre Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"Dans le cadre du RGPD, Cozy Cloud met à jour ses Conditions Générales d'Utilisation qui ont pris effet le 25 Mai 2018\",\"CTA\":\"Lire maintenant\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Afficher le menu latéral\",\"profile\":\"Profil\",\"connectedDevices\":\"Appareils connectés\",\"storage\":\"Espace disque\",\"storage_phrase\":\"%{diskUsage} Go sur %{diskQuota} Go\",\"view_offers\":\"Voir les offres\",\"help\":\"Aide\",\"logout\":\"Déconnexion\",\"soon\":\"à venir\",\"error_UnavailableStack\":\"Connexion à la stack impossible (connection timed-out)\",\"error_UnauthorizedStack\":\"Des permissions sont manquante, l'application ne peut accéder aux ressources demandées.\",\"no_apps\":\"Pas d'applications Cozy trouvées.\",\"menu\":{\"apps\":\"Applications\",\"settings\":\"Paramètres\",\"home_mobile\":\"Retour à l'accueil...\",\"home\":\"Retour à l'accueil\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Apps Cozy\",\"partners\":\"Expérimentation MesInfos\",\"ptnb\":\"Expérimentation Carnet du logement\",\"others\":\"Autres apps\"},\"claudy\":{\"title\":\"Comment utiliser votre Cozy ?\"},\"searchbar\":{\"placeholder\":\"Rechercher\",\"empty\":\"Aucun résultat trouvé pour la requête \\\"%{query}\\\"\"},\"permsModal\":{\"title\":\"Accéder à ton Cozy à partir de ton application\",\"description\":\"Autoriser %{app} à afficher les applications de ton Cozy sur cet appareil\",\"button\":\"Autoriser l'accès\"},\"comingSoon\":{\"store\":{\"title\":\"L'application Store sera bientôt disponible dans votre Cozy\",\"description\":\"Grâce à cozy Store vous pourrez installer les applications que vous souhaitez sur votre Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"Dans le cadre du RGPD, Cozy Cloud met à jour ses Conditions Générales d'Utilisation qui ont pris effet le 25 Mai 2018\",\"CTA\":\"Lire maintenant\"}}}");
 
 /***/ }),
 
@@ -98233,10 +98232,10 @@ module.exports = JSON.parse("{\"drawer\":\"Afficher le menu latéral\",\"profile
 /*!*****************************!*\
   !*** ./src/locales/it.json ***!
   \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98244,10 +98243,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!*****************************!*\
   !*** ./src/locales/ja.json ***!
   \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"メニュードロワーを表示\",\"profile\":\"プロフィール\",\"connectedDevices\":\"接続されたデバイス\",\"storage\":\"ストレージ\",\"storage_phrase\":\"%{diskUsage} GB / %{diskQuota} GB 使用\",\"help\":\"ヘルプ\",\"logout\":\"サインアウト\",\"soon\":\"間もなく\",\"error_UnavailableStack\":\"スタックに到達できません (接続タイムアウト)。\",\"error_UnauthorizedStack\":\"一部のアクセス許可が不足しているため、アプリケーションはスタック上の要求されたリソースにアクセスできません。\",\"no_apps\":\"Cozy にアプリケーションはありません。\",\"menu\":{\"apps\":\"アプリ\",\"settings\":\"設定\",\"home_mobile\":\"ホームに戻る...\",\"home\":\"ホームに戻る\"},\"Categories\":{\"cozy\":\"Cozy アプリ\",\"partners\":\"パートナーアプリ\",\"ptnb\":\"expPTNB\",\"others\":\"他のアプリ\"},\"claudy\":{\"title\":\"Cozy をドライブする方法は?\"},\"searchbar\":{\"placeholder\":\"検索します\",\"empty\":\"問い合わせ “%{query}” の結果が見つかりません\"},\"permsModal\":{\"title\":\"お使いのアプリケーションから Cozy 全体にアクセス\",\"description\":\"%{app} を承認して、このデバイスにお使いの Cozy アプリケーションを表示します\",\"button\":\"アクセスを承認\"},\"comingSoon\":{\"store\":{\"title\":\"ストアアプリケーションはお使いの Cozy でまもなくご利用いただけます。\",\"description\":\"Cozy ストアのおかげで Cozy で欲しいアプリケーションをインストールすることができます。\"}},\"banner\":{\"tos-updated\":{\"description\":\"GDPRを遵守するため、Cozyクラウドは利用規約を更新して2018年5月25日に施行されました\",\"CTA\":\"今すぐお読みください\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"メニュードロワーを表示\",\"profile\":\"プロフィール\",\"connectedDevices\":\"接続されたデバイス\",\"storage\":\"ストレージ\",\"storage_phrase\":\"%{diskUsage} GB / %{diskQuota} GB 使用\",\"view_offers\":\"提案を表示\",\"help\":\"ヘルプ\",\"logout\":\"サインアウト\",\"soon\":\"間もなく\",\"error_UnavailableStack\":\"スタックに到達できません (接続タイムアウト)。\",\"error_UnauthorizedStack\":\"一部のアクセス許可が不足しているため、アプリケーションはスタック上の要求されたリソースにアクセスできません。\",\"no_apps\":\"Cozy にアプリケーションはありません。\",\"menu\":{\"apps\":\"アプリ\",\"settings\":\"設定\",\"home_mobile\":\"ホームに戻る...\",\"home\":\"ホームに戻る\",\"home_title\":\"ホーム\"},\"Categories\":{\"cozy\":\"Cozy アプリ\",\"partners\":\"パートナーアプリ\",\"ptnb\":\"expPTNB\",\"others\":\"他のアプリ\"},\"claudy\":{\"title\":\"Cozy をドライブする方法は?\"},\"searchbar\":{\"placeholder\":\"検索します\",\"empty\":\"問い合わせ “%{query}” の結果が見つかりません\"},\"permsModal\":{\"title\":\"お使いのアプリケーションから Cozy 全体にアクセス\",\"description\":\"%{app} を承認して、このデバイスにお使いの Cozy アプリケーションを表示します\",\"button\":\"アクセスを承認\"},\"comingSoon\":{\"store\":{\"title\":\"ストアアプリケーションはお使いの Cozy でまもなくご利用いただけます。\",\"description\":\"Cozy ストアのおかげで Cozy で欲しいアプリケーションをインストールすることができます。\"}},\"banner\":{\"tos-updated\":{\"description\":\"GDPRを遵守するため、Cozyクラウドは利用規約を更新して2018年5月25日に施行されました\",\"CTA\":\"今すぐお読みください\"}}}");
 
 /***/ }),
 
@@ -98255,10 +98254,10 @@ module.exports = JSON.parse("{\"drawer\":\"メニュードロワーを表示\",\
 /*!*****************************!*\
   !*** ./src/locales/ko.json ***!
   \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98266,10 +98265,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!*****************************!*\
   !*** ./src/locales/nb.json ***!
   \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98277,10 +98276,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!*****************************!*\
   !*** ./src/locales/nl.json ***!
   \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profiel\",\"connectedDevices\":\"Verbonden apparaten\",\"storage\":\"Opslag\",\"storage_phrase\":\"%{diskUsage} GB van %{diskQuota} GB gebruikt\",\"help\":\"Hulp\",\"logout\":\"Log uit\",\"soon\":\"binnenkort\",\"error_UnavailableStack\":\"De stapel is onbereikbaar (verbinding verlopen)\",\"error_UnauthorizedStack\":\"Sommige toestemmingen missen, de toepassing kan niet alles bereiken.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partner apps\",\"ptnb\":\"expPTNB\",\"others\":\"Andere apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profiel\",\"connectedDevices\":\"Verbonden apparaten\",\"storage\":\"Opslag\",\"storage_phrase\":\"%{diskUsage} GB van %{diskQuota} GB gebruikt\",\"view_offers\":\"View offers\",\"help\":\"Hulp\",\"logout\":\"Log uit\",\"soon\":\"binnenkort\",\"error_UnavailableStack\":\"De stapel is onbereikbaar (verbinding verlopen)\",\"error_UnauthorizedStack\":\"Sommige toestemmingen missen, de toepassing kan niet alles bereiken.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partner apps\",\"ptnb\":\"expPTNB\",\"others\":\"Andere apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98288,10 +98287,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!********************************!*\
   !*** ./src/locales/nl_NL.json ***!
   \********************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Navigatiemenu tonen\",\"profile\":\"Profiel\",\"connectedDevices\":\"Verbonden apparaten\",\"storage\":\"Opslag\",\"storage_phrase\":\"%{diskUsage} GB van %{diskQuota} GB gebruikt\",\"help\":\"Hulp\",\"logout\":\"Uitloggen\",\"soon\":\"binnenkort\",\"error_UnavailableStack\":\"De stack is onbereikbaar (verbindingstime-out).\",\"error_UnauthorizedStack\":\"Sommige machtigingen ontbreken. De app kan hierdoor de opgevraagde bron niet benaderen.\",\"no_apps\":\"Geen apps aangetroffen op de Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Instellingen\",\"home_mobile\":\"Terug naar startpagina...\",\"home\":\"Terug naar startpagina\"},\"Categories\":{\"cozy\":\"Cozy-apps\",\"partners\":\"Partner-apps\",\"ptnb\":\"expPTNB\",\"others\":\"Overige apps\"},\"claudy\":{\"title\":\"How beheers je je Cozy?\"},\"searchbar\":{\"placeholder\":\"Zoeken naar iets\",\"empty\":\"Geen resultaten gevonden voor de zoekopdracht \\\"%{query}\\\"\"},\"permsModal\":{\"title\":\"Toegang tot je gehele Cozy vanuit je app\",\"description\":\"%{app} machtigen om je Cozy-apps te tonen op dit apparaat\",\"button\":\"Machtigen\"},\"comingSoon\":{\"store\":{\"title\":\"De Winkel-app is binnenkort beschikbaar op je Cozy.\",\"description\":\"Dankzij de Cozy Winkel kun je je favoriete apps installeren op je Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"In overeenstemming met de GPDR heeft Cozy Cloud de Algemene voorwaarden bijgewerkt. Deze zijn ingegaan op 25 mei 2018.\",\"CTA\":\"Nu lezen\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Navigatiemenu tonen\",\"profile\":\"Profiel\",\"connectedDevices\":\"Verbonden apparaten\",\"storage\":\"Opslag\",\"storage_phrase\":\"%{diskUsage} GB van %{diskQuota} GB gebruikt\",\"view_offers\":\"Aanbiedingen bekijken\",\"help\":\"Hulp\",\"logout\":\"Uitloggen\",\"soon\":\"binnenkort\",\"error_UnavailableStack\":\"De stack is onbereikbaar (verbindingstime-out).\",\"error_UnauthorizedStack\":\"Sommige machtigingen ontbreken. De app kan hierdoor de opgevraagde bron niet benaderen.\",\"no_apps\":\"Geen apps aangetroffen op de Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Instellingen\",\"home_mobile\":\"Terug naar startpagina...\",\"home\":\"Terug naar startpagina\",\"home_title\":\"Startpagina\"},\"Categories\":{\"cozy\":\"Cozy-apps\",\"partners\":\"Partner-apps\",\"ptnb\":\"expPTNB\",\"others\":\"Overige apps\"},\"claudy\":{\"title\":\"How beheers je je Cozy?\"},\"searchbar\":{\"placeholder\":\"Zoeken naar iets\",\"empty\":\"Geen resultaten gevonden voor de zoekopdracht \\\"%{query}\\\"\"},\"permsModal\":{\"title\":\"Toegang tot je gehele Cozy vanuit je app\",\"description\":\"%{app} machtigen om je Cozy-apps te tonen op dit apparaat\",\"button\":\"Machtigen\"},\"comingSoon\":{\"store\":{\"title\":\"De Winkel-app is binnenkort beschikbaar op je Cozy.\",\"description\":\"Dankzij de Cozy Winkel kun je je favoriete apps installeren op je Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"In overeenstemming met de GPDR heeft Cozy Cloud de Algemene voorwaarden bijgewerkt. Deze zijn ingegaan op 25 mei 2018.\",\"CTA\":\"Nu lezen\"}}}");
 
 /***/ }),
 
@@ -98299,10 +98298,10 @@ module.exports = JSON.parse("{\"drawer\":\"Navigatiemenu tonen\",\"profile\":\"P
 /*!*****************************!*\
   !*** ./src/locales/pl.json ***!
   \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Wysuń menu\",\"profile\":\"Profil\",\"connectedDevices\":\"Połączone urządzenia\",\"storage\":\"Magazyn\",\"storage_phrase\":\"%{diskUsage} GB z %{diskQuota} GB użyte\",\"help\":\"Pomoc\",\"logout\":\"Wyloguj\",\"soon\":\"niebawem\",\"error_UnavailableStack\":\"Stos jest niedostępny (przekroczono limit czasu połączenia).\",\"error_UnauthorizedStack\":\"Brakuje uprawnień, aplikacja nie może korzystać z wymaganych zasobów stosu.\",\"no_apps\":\"Nie znaleziono żadnych aplikacji na Cozy.\",\"menu\":{\"apps\":\"Aplikacje\",\"settings\":\"Ustawienia\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Aplikacje Cozy\",\"partners\":\"Aplikacje Partnerskie\",\"ptnb\":\"expPTNB\",\"others\":\"Aplikacje inne\"},\"claudy\":{\"title\":\"Jak korzystać z Twojego Cozy?\"},\"searchbar\":{\"placeholder\":\"Szukaj czegokolwiek\",\"empty\":\"Brak wyników dla wyszukania \\\"%{query}\\\"\"},\"permsModal\":{\"title\":\"Uzyskaj dostęp do swojego Cozy z dowolnej aplikacji.\",\"description\":\"Autoryzuj %{app} aby korzystać z aplikacji Cozy na tym urządzeniu\",\"button\":\"Autoryzuj dostęp\"},\"comingSoon\":{\"store\":{\"title\":\"Market Aplikacji będzie wkrótce dostępny w Twoim Cozy.\",\"description\":\"Dzięki Marketowi Cozy będziesz mógł instalować aplikacje, które będą Ci potrzebne.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Wysuń menu\",\"profile\":\"Profil\",\"connectedDevices\":\"Połączone urządzenia\",\"storage\":\"Magazyn\",\"storage_phrase\":\"%{diskUsage} GB z %{diskQuota} GB użyte\",\"view_offers\":\"View offers\",\"help\":\"Pomoc\",\"logout\":\"Wyloguj\",\"soon\":\"niebawem\",\"error_UnavailableStack\":\"Stos jest niedostępny (przekroczono limit czasu połączenia).\",\"error_UnauthorizedStack\":\"Brakuje uprawnień, aplikacja nie może korzystać z wymaganych zasobów stosu.\",\"no_apps\":\"Nie znaleziono żadnych aplikacji na Cozy.\",\"menu\":{\"apps\":\"Aplikacje\",\"settings\":\"Ustawienia\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Aplikacje Cozy\",\"partners\":\"Aplikacje Partnerskie\",\"ptnb\":\"expPTNB\",\"others\":\"Aplikacje inne\"},\"claudy\":{\"title\":\"Jak korzystać z Twojego Cozy?\"},\"searchbar\":{\"placeholder\":\"Szukaj czegokolwiek\",\"empty\":\"Brak wyników dla wyszukania \\\"%{query}\\\"\"},\"permsModal\":{\"title\":\"Uzyskaj dostęp do swojego Cozy z dowolnej aplikacji.\",\"description\":\"Autoryzuj %{app} aby korzystać z aplikacji Cozy na tym urządzeniu\",\"button\":\"Autoryzuj dostęp\"},\"comingSoon\":{\"store\":{\"title\":\"Market Aplikacji będzie wkrótce dostępny w Twoim Cozy.\",\"description\":\"Dzięki Marketowi Cozy będziesz mógł instalować aplikacje, które będą Ci potrzebne.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98310,10 +98309,10 @@ module.exports = JSON.parse("{\"drawer\":\"Wysuń menu\",\"profile\":\"Profil\",
 /*!*****************************!*\
   !*** ./src/locales/pt.json ***!
   \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Armazenamento\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Ajuda\",\"logout\":\"Desligar\",\"soon\":\"Em breve\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Configurações\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Pesquisa algo\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Armazenamento\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Ajuda\",\"logout\":\"Desligar\",\"soon\":\"Em breve\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Configurações\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Pesquisa algo\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98321,10 +98320,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!********************************!*\
   !*** ./src/locales/pt_BR.json ***!
   \********************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98332,10 +98331,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!*****************************!*\
   !*** ./src/locales/ro.json ***!
   \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98343,10 +98342,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!********************************!*\
   !*** ./src/locales/ro_RO.json ***!
   \********************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98354,10 +98353,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!*****************************!*\
   !*** ./src/locales/ru.json ***!
   \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Показать панель меню\",\"profile\":\"Профиль\",\"connectedDevices\":\"Присоединённые устройства\",\"storage\":\"Хранилище\",\"storage_phrase\":\"%{diskUsage} ГБ из %{diskQuota} ГБ использовано\",\"help\":\"Помощь\",\"logout\":\"Выход\",\"soon\":\"скоро\",\"error_UnavailableStack\":\"Это стек не доступен (превышено время ожидания)\",\"error_UnauthorizedStack\":\"Некоторые разрешения отсутствуют, получить доступ к запрашиваемому ресурсу в стеке не возможно.\",\"no_apps\":\"В Cozy приложение не найдены.\",\"menu\":{\"apps\":\"Приложения\",\"settings\":\"Настройки\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy приложения\",\"partners\":\"Приложения партнеров\",\"ptnb\":\"expPTNB\",\"others\":\"Другие приложения\"},\"claudy\":{\"title\":\"Как найти ваш Cozy?\"},\"searchbar\":{\"placeholder\":\"Найти что-нибудь\",\"empty\":\"По запросу “%{query}” ничего не найдено.\"},\"permsModal\":{\"title\":\"Получите доступ ко всем функциям Cozy из приложения\",\"description\":\"Авторизация %{app}  для отображения приложений Cozy на этом устройстве\",\"button\":\"Разрешенный доступ\"},\"comingSoon\":{\"store\":{\"title\":\"Магазин Приложений скоро будет доступен в вашем Cozy.\",\"description\":\"Благодаря Магазину Cozy вы можете установить те приложения, которые вам нужны в вашем Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Прочитать\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Показать панель меню\",\"profile\":\"Профиль\",\"connectedDevices\":\"Присоединённые устройства\",\"storage\":\"Хранилище\",\"storage_phrase\":\"%{diskUsage} ГБ из %{diskQuota} ГБ использовано\",\"view_offers\":\"View offers\",\"help\":\"Помощь\",\"logout\":\"Выход\",\"soon\":\"скоро\",\"error_UnavailableStack\":\"Это стек не доступен (превышено время ожидания)\",\"error_UnauthorizedStack\":\"Некоторые разрешения отсутствуют, получить доступ к запрашиваемому ресурсу в стеке не возможно.\",\"no_apps\":\"В Cozy приложение не найдены.\",\"menu\":{\"apps\":\"Приложения\",\"settings\":\"Настройки\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy приложения\",\"partners\":\"Приложения партнеров\",\"ptnb\":\"expPTNB\",\"others\":\"Другие приложения\"},\"claudy\":{\"title\":\"Как найти ваш Cozy?\"},\"searchbar\":{\"placeholder\":\"Найти что-нибудь\",\"empty\":\"По запросу “%{query}” ничего не найдено.\"},\"permsModal\":{\"title\":\"Получите доступ ко всем функциям Cozy из приложения\",\"description\":\"Авторизация %{app}  для отображения приложений Cozy на этом устройстве\",\"button\":\"Разрешенный доступ\"},\"comingSoon\":{\"store\":{\"title\":\"Магазин Приложений скоро будет доступен в вашем Cozy.\",\"description\":\"Благодаря Магазину Cozy вы можете установить те приложения, которые вам нужны в вашем Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Прочитать\"}}}");
 
 /***/ }),
 
@@ -98365,10 +98364,10 @@ module.exports = JSON.parse("{\"drawer\":\"Показать панель мен�
 /*!********************************!*\
   !*** ./src/locales/ru_RU.json ***!
   \********************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Профиль\",\"connectedDevices\":\"Присоединённые устройства\",\"storage\":\"Хранилище\",\"storage_phrase\":\"%{diskUsage} ГБ из %{diskQuota} ГБ использовано\",\"help\":\"Помощь\",\"logout\":\"Выход\",\"soon\":\"soon\",\"error_UnavailableStack\":\"Это стек не доступен (превышено время ожидания)\",\"error_UnauthorizedStack\":\"Некоторые разрешения отсутствуют, получить доступ к запрашиваемому ресурсу в стеке не возможно.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Профиль\",\"connectedDevices\":\"Присоединённые устройства\",\"storage\":\"Хранилище\",\"storage_phrase\":\"%{diskUsage} ГБ из %{diskQuota} ГБ использовано\",\"view_offers\":\"View offers\",\"help\":\"Помощь\",\"logout\":\"Выход\",\"soon\":\"soon\",\"error_UnavailableStack\":\"Это стек не доступен (превышено время ожидания)\",\"error_UnauthorizedStack\":\"Некоторые разрешения отсутствуют, получить доступ к запрашиваемому ресурсу в стеке не возможно.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98376,10 +98375,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Пр
 /*!*****************************!*\
   !*** ./src/locales/sk.json ***!
   \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98387,10 +98386,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!********************************!*\
   !*** ./src/locales/sk_SK.json ***!
   \********************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98398,10 +98397,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!*****************************!*\
   !*** ./src/locales/sq.json ***!
   \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profil\",\"connectedDevices\":\"Pajisje të lidhura\",\"storage\":\"Depozitim\",\"storage_phrase\":\"%{diskUsage} GB të përdorur nga %{diskQuota} GB gjithsej\",\"help\":\"Ndihmë\",\"logout\":\"Dilni\",\"soon\":\"së shpejti\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"S’u gjetën aplikacione te Cozy\",\"menu\":{\"apps\":\"Aplikacione\",\"settings\":\"Rregullime\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Aplikacione Cozy\",\"partners\":\"Aplikacione partnerësh\",\"ptnb\":\"expPTNB\",\"others\":\"Aplikacione të tjerë\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Hyni në krejt Cozy-n nga aplikacioni juaj\",\"description\":\"Autorizojeni %{app} të shfaqë në këtë pajisje aplikacionet tuaja Cozy\",\"button\":\"Autorizo hyrjen\"},\"comingSoon\":{\"store\":{\"title\":\"Aplikacioni Store do të jetë gati së shpejti në Cozy.\",\"description\":\"Falë Cozy Store-it do të jeni në gjendje të instaloni aplikacionet që doni në Cozy-n tuaj.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profil\",\"connectedDevices\":\"Pajisje të lidhura\",\"storage\":\"Depozitim\",\"storage_phrase\":\"%{diskUsage} GB të përdorur nga %{diskQuota} GB gjithsej\",\"view_offers\":\"View offers\",\"help\":\"Ndihmë\",\"logout\":\"Dilni\",\"soon\":\"së shpejti\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"S’u gjetën aplikacione te Cozy\",\"menu\":{\"apps\":\"Aplikacione\",\"settings\":\"Rregullime\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Aplikacione Cozy\",\"partners\":\"Aplikacione partnerësh\",\"ptnb\":\"expPTNB\",\"others\":\"Aplikacione të tjerë\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Hyni në krejt Cozy-n nga aplikacioni juaj\",\"description\":\"Autorizojeni %{app} të shfaqë në këtë pajisje aplikacionet tuaja Cozy\",\"button\":\"Autorizo hyrjen\"},\"comingSoon\":{\"store\":{\"title\":\"Aplikacioni Store do të jetë gati së shpejti në Cozy.\",\"description\":\"Falë Cozy Store-it do të jeni në gjendje të instaloni aplikacionet që doni në Cozy-n tuaj.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98409,10 +98408,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!********************************!*\
   !*** ./src/locales/sq_AL.json ***!
   \********************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98420,10 +98419,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!*****************************!*\
   !*** ./src/locales/sv.json ***!
   \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98431,10 +98430,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!*****************************!*\
   !*** ./src/locales/tr.json ***!
   \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98442,10 +98441,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!********************************!*\
   !*** ./src/locales/uk_UA.json ***!
   \********************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98453,10 +98452,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!*****************************!*\
   !*** ./src/locales/zh.json ***!
   \*****************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
@@ -98464,10 +98463,10 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*!********************************!*\
   !*** ./src/locales/zh_CN.json ***!
   \********************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"显示菜单抽屉\",\"profile\":\"资料\",\"connectedDevices\":\"已连接的设备\",\"storage\":\"储存\",\"storage_phrase\":\"%{diskQuota} GB 中的 %{diskUsage} GB已被使用\",\"help\":\"帮助\",\"logout\":\"登出\",\"soon\":\"很快\",\"error_UnavailableStack\":\"此堆栈无法连接 (连接超时)\",\"error_UnauthorizedStack\":\"缺少某些权限，应用程序无法访问堆栈上请求的资源。\",\"no_apps\":\"在Cozy中没有找到任何应用程序。\",\"menu\":{\"apps\":\"应用程序\",\"settings\":\"设置\",\"home_mobile\":\"回到首页...\",\"home\":\"回到首页\"},\"Categories\":{\"cozy\":\"Cozy应用程序\",\"partners\":\"合作伙伴应用程序\",\"ptnb\":\"expPTNB\",\"others\":\"其他应用\"},\"claudy\":{\"title\":\"如何驱动您的Cozy？\"},\"searchbar\":{\"placeholder\":\"搜索任何内容\",\"empty\":\"没有任何关于“%{query}”的内容\"},\"permsModal\":{\"title\":\"从您的应用程序访问整个Cozy\",\"description\":\"授权%{app}在此设备上显示您的Cozy应用程序\",\"button\":\"授权访问\"},\"comingSoon\":{\"store\":{\"title\":\"商店应用程序将很快在您的Cozy中可用。\",\"description\":\"感谢Cozy商店，您将能够在您的Cozy中安装您想要的应用程序。\"}},\"banner\":{\"tos-updated\":{\"description\":\"为了遵守GDPR，Cozy Cloud更新了其于2018年5月25日生效的服务条款\",\"CTA\":\"立即阅读\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"显示菜单抽屉\",\"profile\":\"资料\",\"connectedDevices\":\"已连接的设备\",\"storage\":\"储存\",\"storage_phrase\":\"%{diskQuota} GB 中的 %{diskUsage} GB已被使用\",\"view_offers\":\"View offers\",\"help\":\"帮助\",\"logout\":\"登出\",\"soon\":\"很快\",\"error_UnavailableStack\":\"此堆栈无法连接 (连接超时)\",\"error_UnauthorizedStack\":\"缺少某些权限，应用程序无法访问堆栈上请求的资源。\",\"no_apps\":\"在Cozy中没有找到任何应用程序。\",\"menu\":{\"apps\":\"应用程序\",\"settings\":\"设置\",\"home_mobile\":\"回到首页...\",\"home\":\"回到首页\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy应用程序\",\"partners\":\"合作伙伴应用程序\",\"ptnb\":\"expPTNB\",\"others\":\"其他应用\"},\"claudy\":{\"title\":\"如何驱动您的Cozy？\"},\"searchbar\":{\"placeholder\":\"搜索任何内容\",\"empty\":\"没有任何关于“%{query}”的内容\"},\"permsModal\":{\"title\":\"从您的应用程序访问整个Cozy\",\"description\":\"授权%{app}在此设备上显示您的Cozy应用程序\",\"button\":\"授权访问\"},\"comingSoon\":{\"store\":{\"title\":\"商店应用程序将很快在您的Cozy中可用。\",\"description\":\"感谢Cozy商店，您将能够在您的Cozy中安装您想要的应用程序。\"}},\"banner\":{\"tos-updated\":{\"description\":\"为了遵守GDPR，Cozy Cloud更新了其于2018年5月25日生效的服务条款\",\"CTA\":\"立即阅读\"}}}");
 
 /***/ }),
 
@@ -98475,10 +98474,10 @@ module.exports = JSON.parse("{\"drawer\":\"显示菜单抽屉\",\"profile\":\"�
 /*!********************************!*\
   !*** ./src/locales/zh_TW.json ***!
   \********************************/
-/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
+/*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
