@@ -94522,6 +94522,8 @@ var _reactRedux = __webpack_require__(/*! react-redux */ "./node_modules/react-r
 
 var _redux = __webpack_require__(/*! redux */ "./node_modules/redux/es/index.js");
 
+var _get = _interopRequireDefault(__webpack_require__(/*! lodash/get */ "./node_modules/lodash/get.js"));
+
 var _I18n = __webpack_require__(/*! cozy-ui/react/I18n */ "./node_modules/cozy-ui/react/I18n/index.jsx");
 
 var _Button = __webpack_require__(/*! cozy-ui/react/Button */ "./node_modules/cozy-ui/react/Button/index.jsx");
@@ -94540,12 +94542,20 @@ var _helper = __webpack_require__(/*! components/Settings/helper */ "./src/compo
 
 var instanceModel = undefined;
 var hasAnOffer = undefined;
+var isFremiumFixed = undefined;
 
 if (_cozyClient.models) {
   instanceModel = _cozyClient.models.instance; //TODO fallback from cozy-client
 
+  isFremiumFixed = function isFremiumFixed(data) {
+    var GB = 1000 * 1000 * 1000;
+    var PREMIUM_QUOTA = 50 * GB;
+    var quota = (0, _get.default)(data, 'diskUsage.data.attributes.quota', false);
+    return parseInt(quota) < PREMIUM_QUOTA;
+  };
+
   hasAnOffer = function hasAnOffer(data) {
-    return !instanceModel.isSelfHosted(data) && instanceModel.arePremiumLinksEnabled(data) && instanceModel.getUuid(data) && !instanceModel.isFreemiumUser(data);
+    return !instanceModel.isSelfHosted(data) && instanceModel.arePremiumLinksEnabled(data) && instanceModel.getUuid(data) && !isFremiumFixed(data);
   };
 }
 
