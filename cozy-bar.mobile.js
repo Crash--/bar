@@ -95654,9 +95654,11 @@ function (_Component) {
       var isFetchingFromQueries;
       var viewOfferButtonText = '';
       var canCheckPremium = (0, _helper.cozyClientCanCheckPremium)();
+      console.log('canCheckPremium', canCheckPremium);
 
       if (canCheckPremium) {
         isFetchingFromQueries = (0, _helper.isFetchingQueries)([diskUsageQuery, instanceQuery, contextQuery]);
+        console.log('isFetchingFromQueries', isFetchingFromQueries);
 
         if (!isFetchingFromQueries) {
           var data = {
@@ -95664,6 +95666,7 @@ function (_Component) {
             diskUsage: diskUsageQuery,
             instance: instanceQuery
           };
+          console.log('data', data);
           shouldDisplayViewOfferButton = instanceModel.shouldDisplayOffers(data);
 
           if (shouldDisplayViewOfferButton && !hasAnOffer(data)) {
@@ -99201,7 +99204,7 @@ module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Prof
 /*! exports provided: drawer, profile, connectedDevices, storage, storage_phrase, view_offers, view_my_offer, help, logout, soon, error_UnavailableStack, error_UnauthorizedStack, no_apps, menu, Categories, claudy, searchbar, permsModal, comingSoon, banner, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"view_my_offer\":\"View my offer\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
+module.exports = JSON.parse("{\"drawer\":\"Show menu drawer\",\"profile\":\"Profile\",\"connectedDevices\":\"Connected devices\",\"storage\":\"Storage\",\"storage_phrase\":\"%{diskUsage} GB of %{diskQuota} GB used\",\"view_offers\":\"View offers\",\"view_my_offer\":\"My offer\",\"help\":\"Help\",\"logout\":\"Sign out\",\"soon\":\"soon\",\"error_UnavailableStack\":\"The stack is unreachable (connection timed-out).\",\"error_UnauthorizedStack\":\"Some permissions are missing, the application can't access the requested resource on the stack.\",\"no_apps\":\"No applications found on the Cozy.\",\"menu\":{\"apps\":\"Apps\",\"settings\":\"Settings\",\"home_mobile\":\"Back to home...\",\"home\":\"Back to home\",\"home_title\":\"Home\"},\"Categories\":{\"cozy\":\"Cozy apps\",\"partners\":\"Partners apps\",\"ptnb\":\"expPTNB\",\"others\":\"Other apps\"},\"claudy\":{\"title\":\"How to drive your Cozy?\"},\"searchbar\":{\"placeholder\":\"Search anything\",\"empty\":\"No result has been found for the query “%{query}”\"},\"permsModal\":{\"title\":\"Access your whole Cozy from your application\",\"description\":\"Authorize %{app} to display your Cozy applications on this device\",\"button\":\"Authorize access\"},\"comingSoon\":{\"store\":{\"title\":\"The Store application will be available soon in your Cozy.\",\"description\":\"Thanks to Cozy Store you will be able to install the applications that you want in your Cozy.\"}},\"banner\":{\"tos-updated\":{\"description\":\"To comply with the GDPR, Cozy Cloud has updated its Terms of Services that have taken effect on May 25, 2018\",\"CTA\":\"Read now\"}}}");
 
 /***/ }),
 
